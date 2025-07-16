@@ -1,0 +1,8 @@
+#!/home/dell/cmbagent/cmbagent_env/bin/python3
+# -*- coding: utf-8 -*-
+import re
+import sys
+from cobaya.grid_tools.gridtables import grid_param_compare
+if __name__ == '__main__':
+    sys.argv[0] = re.sub(r'(-script\.pyw|\.exe)?$', '', sys.argv[0])
+    sys.exit(grid_param_compare())
