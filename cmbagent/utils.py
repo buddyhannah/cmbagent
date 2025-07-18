@@ -5,6 +5,8 @@ import pickle
 import logging
 from ruamel.yaml import YAML
 from autogen.cmbagent_utils import cmbagent_debug
+from dotenv import load_dotenv
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='[%(name)s] %(message)s')
@@ -107,60 +109,41 @@ file_search_max_num_results = autogen.file_search_max_num_results
 
 default_max_round = 50
 
-# default_llm_model = 'gpt-4o-2024-11-20'
-default_llm_model = 'gpt-4.1-2025-04-14'
-# default_llm_model = 'gpt-4o-mini'
-# default_llm_model = "gemini-2.0-flash"
+default_llm_model = 'Qwen3-14B-Squelching-Fantasies'
 
-
-
-
-
-default_agents_llm_model ={
-    "engineer": "gpt-4.1-2025-04-14",
-    "aas_keyword_finder": "o3-mini-2025-01-31",
-    "task_improver": "o3-mini-2025-01-31",
-    "task_recorder": "gpt-4o-2024-11-20",
-    # "control": "gpt-4o-2024-11-20",
-    # "control": "gemini-2.5-pro-preview-03-25",
-    # "terminator": "gpt-4o-2024-11-20",
-    # "terminator": "gemini-2.5-pro-preview-03-25",
-    "researcher": "gpt-4.1-2025-04-14",
-    "perplexity": "o3-mini-2025-01-31",
-    "planner": "gpt-4.1-2025-04-14",
-    # "plan_reviewer": "claude-3-7-sonnet-20250219",
-    "plan_reviewer": "o3-mini-2025-01-31",
-    # "plan_setter": "gpt-4o-2024-11-20",
-    # "idea_hater": "claude-3-7-sonnet-20250219",
-    "idea_hater":  "o3-mini-2025-01-31",
-    "idea_maker": "gpt-4.1-2025-04-14",
-
-    # rag agents
-    "classy_sz": "gpt-4o-2024-11-20",
-    "camb": "gpt-4o-2024-11-20",
-    "classy": "gpt-4o-2024-11-20",
-    "cobaya": "gpt-4o-2024-11-20",
-    "planck": "gpt-4o-2024-11-20",
-
-    "camb_context": "gpt-4.1-2025-04-14",
-    # "camb_context": "gemini-2.5-flash-preview-04-17",
-    # "camb_context": "gemini-2.5-pro-preview-03-25",
-    # "camb_context": "gemini-2.5-flash",
-    # "camb_context": "gemini-2.5-flash-preview-05-20",
-
-    # "classy_context": "gpt-4o-2024-11-20",
+# openRouter, 
+default_agents_llm_model = {
+    "engineer": "QwQ-32B",
+    "aas_keyword_finder": "QwQ-32B",
+    "task_improver": "QwQ-32B",
+    "task_recorder": "Qwen3-14B-Squelching-Fantasies",
+    "researcher": "tngtech/deepseek-r1t2-chimera:free",
+    "perplexity": "QwQ-32B",
+    "planner": "llama3-8b-8192",
+    "plan_reviewer": "tngtech/deepseek-r1t2-chimera:free",
+    "idea_hater": "QwQ-32B",
+    "idea_maker": "llama3-8b-8192",
     
-    # structured output agents
-    "classy_sz_response_formatter": "gpt-4o-2024-11-20",
-    "camb_response_formatter": "gpt-4.1-2025-04-14",
-    "classy_response_formatter": "gpt-4.1-2025-04-14",
-    "cobaya_response_formatter": "gpt-4o-2024-11-20",
-    "engineer_response_formatter": "o3-mini-2025-01-31",
-    # "engineer_response_formatter": "gemini-2.5-pro-preview-03-25",
-    "researcher_response_formatter": "o3-mini-2025-01-31",
-    "executor_response_formatter": "o3-mini-2025-01-31",
-    #"executor_response_formatter": "gemini-2.5-pro-preview-03-25",
+    # rag agents
+    "classy_sz": "Qwen3-14B-Squelching-Fantasies",
+    "camb": "llama3-8b-8192",
+    "classy": "Qwen3-14B-Squelching-Fantasies",
+    "cobaya": "Qwen3-14B-Squelching-Fantasies",
+    
+    "planck": "Qwen3-14B-Squelching-Fantasies",
+    
+    "camb_context": "QwQ-32B",
+    
+    # formatting agents
+    "classy_sz_response_formatter": "tngtech/deepseek-r1t2-chimera:free",
+    "camb_response_formatter": "Qwen3-14B-Squelching-Fantasies",
+    "classy_response_formatter": "Qwen3-14B-Squelching-Fantasies",
+    "cobaya_response_formatter": "Qwen3-14B-Squelching-Fantasies",
+    "engineer_response_formatter": "tngtech/deepseek-r1t2-chimera:free",
+    "researcher_response_formatter": "tngtech/deepseek-r1t2-chimera:free",
+    "executor_response_formatter": "Qwen3-14B-Squelching-Fantasies",
 }
+
 
 default_agent_llm_configs = {}
 
@@ -169,16 +152,20 @@ def get_api_keys_from_env():
         "OPENAI" : os.getenv("OPENAI_API_KEY"),
         "GEMINI" : os.getenv("GEMINI_API_KEY"),
         "ANTHROPIC" : os.getenv("ANTHROPIC_API_KEY"),
+
+        "OPENROUTER": os.getenv("OPENROUTER_API_KEY"),
+        "ARLIAI": os.getenv("ARLIAI_API_KEY"),
+        "GROQ": os.getenv("GROQ_API_KEY")
     }
     return api_keys
 
-def get_model_config(model, api_keys):
+def get_model_config(model, api_keys=None):
     config = {
         "model": model,
-        "api_key": None,
+        "api_key":  None,
         "api_type": None
     }
-    
+
     if 'o3' in model:
         config.update({
             "reasoning_effort": "medium",
@@ -186,20 +173,45 @@ def get_model_config(model, api_keys):
             "api_type": "openai"
         })
     elif "gemini" in model:
+        print("using gemini")
         config.update({
+            #"model": "gemini-pro",
             "api_key": api_keys["GEMINI"],
-            "api_type": "google"
+            "api_type": "google",
+            #"base_url": "https://generativelanguage.googleapis.com/v1beta",
+            #"project_id": "cmbagent-466216"
+            
         })
     elif "claude" in model:
         config.update({
             "api_key": api_keys["ANTHROPIC"],
             "api_type": "anthropic"
         })
-    else:
+    elif "llama3" in model:
+        config.update({ 
+            "api_key": api_keys["GROQ"],
+            "api_type": "openai",  
+            "base_url": "https://api.groq.com/openai/v1"
+        })
+    elif "gpt" in model:  
         config.update({
             "api_key": api_keys["OPENAI"],
             "api_type": "openai"
         })
+
+    elif "deepseek" in model:
+        config.update({
+            "api_key": api_keys["OPENROUTER"],
+            "api_type": "openai",  # openai-compatible schema
+            "base_url": "https://openrouter.ai/api/v1"
+        })
+    else:
+        config.update({
+            "api_key": api_keys.get("ARLIAI"),
+            "api_type": "openai",
+            "base_url": "https://api.arliai.com/v1"  
+        })
+
     return config
 
 api_keys_env = get_api_keys_from_env()
