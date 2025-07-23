@@ -1,0 +1,7 @@
+Goal:
+Generate the matter power spectrum P(k) for two different cosmological models (e.g., varying Ωm,H0 or ns) and compare them.
+
+Tasks:
+- Use CAMB or classy to generate P(k) for both models.
+- Plot the spectra on the same axes.
+- Calculate the ratio P1(k)/P2(k) to visualize differences.

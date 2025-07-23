@@ -1,0 +1,7 @@
+Let t temperature of the cosmic microwave background (CMB) at redshift z be given by T(z).
+
+Write a Python function that:
+- Takes a list of redshifts
+- Computes corresponding CMB temperatures
+- Plots T(z) vs z
+

@@ -509,6 +509,12 @@ class CMBAgent:
               mode = "default", # can be "one_shot" or "default" (default is planning and control)
               step = None,
               max_rounds=10):
+        
+        print("[DEBUG] solve: Initial task =", task)
+        print("[DEBUG] solve: initial_agent =", initial_agent)
+        print("[DEBUG] solve: shared_context input =", shared_context)
+
+        
         self.step = step ## record the step for the context carryover workflow 
         this_shared_context = copy.deepcopy(self.shared_context)
         
@@ -531,8 +537,9 @@ class CMBAgent:
             
             if initial_agent == 'perplexity':
                 one_shot_shared_context['perplexity_query'] = self.get_agent_object_from_name('perplexity').info['instructions'].format(main_task=task)
-                # print('one_shot_shared_context: ', one_shot_shared_context)
-
+                print('one_shot_shared_context: ', one_shot_shared_context)
+                print("[DEBUG] solve: Constructing perplexity query")
+            
             this_shared_context.update(one_shot_shared_context)
             this_shared_context.update(shared_context or {})
 
@@ -592,6 +599,7 @@ class CMBAgent:
                                       "name": "main_cmbagent_chat"},
             )
 
+     
         chat_result, context_variables, last_agent = initiate_group_chat(
             pattern=agent_pattern,
             messages=this_shared_context['main_task'],
@@ -604,7 +612,7 @@ class CMBAgent:
         self.last_agent = last_agent
         self.chat_result = chat_result
 
-
+    
     def get_agent_object_from_name(self,name):
         for agent in self.agents:
             if agent.info['name'] == name:
@@ -754,7 +762,6 @@ class CMBAgent:
             print()
 
     def create_assistant(self, client, agent):
-
         if cmbagent_debug:
             print(f"-->Creating assistant {agent.name}")
             print(f"--> llm_config: {self.llm_config}")
@@ -766,8 +773,8 @@ class CMBAgent:
             tools=[{"type": "file_search"}],
             tool_resources={"file_search": {"vector_store_ids":[]}},
             model=agent.llm_config['config_list'][0]['model'],
-            # tool_choice={"type": "function", "function": {"name": "file_search"}}, ## not possible to set tool_choice as argument as of 8/03/2025
-            # response_format=agent.llm_config['config_list'][0]['response_format']
+            #tool_choice={"type": "function", "function": {"name": "file_search"}}, ## not possible to set tool_choice as argument as of 8/03/2025
+            #response_format=agent.llm_config['config_list'][0]['response_format']
         )
 
         if cmbagent_debug:
@@ -1536,12 +1543,18 @@ def one_shot(
             ):
     start_time = time.time()
 
+    print("[DEBUG] one_shot: task =", task)
+    print("[DEBUG] one_shot: agent =", agent)
+
     if api_keys is None:
         api_keys = get_api_keys_from_env()
     
     engineer_config = get_model_config(engineer_model, api_keys)
     researcher_config = get_model_config(researcher_model, api_keys)
         
+    print("[DEBUG] one_shot: engineer_model =", engineer_model)
+    print("[DEBUG] one_shot: researcher_model =", researcher_model)
+
     cmbagent = CMBAgent(
         mode = "one_shot",
         work_dir = work_dir,
@@ -1560,7 +1573,7 @@ def one_shot(
     shared_context = {'max_n_attempts': max_n_attempts}
 
     if agent == 'camb_context':
-
+        print("[DEBUG] one_shot: Fetching camb_context...")
         # Fetch the file (30-second safety timeout)
         resp = requests.get(camb_context_url, timeout=30) # use something different different... debug this lines
         resp.raise_for_status()           # Raises an HTTPError for non-200 codes
@@ -1570,7 +1583,7 @@ def one_shot(
 
 
     if agent == 'classy_context':
-
+        print("[DEBUG] one_shot: Fetching classy_context...")
         # Fetch the file (30-second safety timeout)
         resp = requests.get(classy_context_url, timeout=30)
         resp.raise_for_status()           # Raises an HTTPError for non-200 codes
@@ -1592,6 +1605,8 @@ def one_shot(
                     mode = "one_shot",
                     shared_context = shared_context
                     )
+    
+    print("[DEBUG] one_shot: shared_context =", shared_context)
     
     end_time = time.time()
     execution_time = end_time - start_time
@@ -1789,3 +1804,5 @@ def get_keywords(input_text: str, n_keywords: int = 5, work_dir = work_dir_defau
         json.dump(timing_report, f, indent=2)
     
     return aas_keywords
+
+

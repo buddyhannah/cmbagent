@@ -5,6 +5,8 @@ import pickle
 import logging
 from ruamel.yaml import YAML
 from autogen.cmbagent_utils import cmbagent_debug
+
+
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -109,39 +111,42 @@ file_search_max_num_results = autogen.file_search_max_num_results
 
 default_max_round = 50
 
-default_llm_model = 'Qwen3-14B-Squelching-Fantasies'
+default_llm_model = "deepseek/deepseek-chat-v3-0324:free"
 
-# openRouter, 
+'''
+Agents that use tool calling:
+engineer, researcher, idea_maker, idea_hater, camb_context, classy_context, aas_keyword_finder
+'''
 default_agents_llm_model = {
-    "engineer": "QwQ-32B",
-    "aas_keyword_finder": "QwQ-32B",
-    "task_improver": "QwQ-32B",
-    "task_recorder": "Qwen3-14B-Squelching-Fantasies",
-    "researcher": "tngtech/deepseek-r1t2-chimera:free",
-    "perplexity": "QwQ-32B",
-    "planner": "llama3-8b-8192",
-    "plan_reviewer": "tngtech/deepseek-r1t2-chimera:free",
-    "idea_hater": "QwQ-32B",
-    "idea_maker": "llama3-8b-8192",
+    "engineer": "mistral-small",
+    "aas_keyword_finder": "llama-3.1-8b-instant", # Qwen3-235B-A22B
+    "task_improver": "mistral-small",
+    "task_recorder": "mistral-small",
+    "researcher": "llama-3.1-8b-instant",
+    "perplexity": "mistral-small",
+    "planner": "mistral-small",
+    "plan_reviewer": "google/gemini-2.0-flash-exp:free",
+    "idea_hater": "llama-3.1-8b-instant",
+    "idea_maker": "deepseek/deepseek-chat-v3-0324:free",
     
     # rag agents
-    "classy_sz": "Qwen3-14B-Squelching-Fantasies",
-    "camb": "llama3-8b-8192",
-    "classy": "Qwen3-14B-Squelching-Fantasies",
-    "cobaya": "Qwen3-14B-Squelching-Fantasies",
+    "classy_sz": "mistral-small",
+    "camb": "llama-3.1-8b-instant",
+    "classy": "mistral-small",
+    "cobaya": "mistral-small",
     
-    "planck": "Qwen3-14B-Squelching-Fantasies",
+    "planck": "mistral-small",
     
-    "camb_context": "QwQ-32B",
+    "camb_context": "deepseek/deepseek-chat-v3-0324:free",
     
     # formatting agents
-    "classy_sz_response_formatter": "tngtech/deepseek-r1t2-chimera:free",
-    "camb_response_formatter": "Qwen3-14B-Squelching-Fantasies",
-    "classy_response_formatter": "Qwen3-14B-Squelching-Fantasies",
-    "cobaya_response_formatter": "Qwen3-14B-Squelching-Fantasies",
-    "engineer_response_formatter": "tngtech/deepseek-r1t2-chimera:free",
-    "researcher_response_formatter": "tngtech/deepseek-r1t2-chimera:free",
-    "executor_response_formatter": "Qwen3-14B-Squelching-Fantasies",
+    "classy_sz_response_formatter": "deepseek/deepseek-chat-v3-0324:free",
+    "camb_response_formatter": "mistral-small",
+    "classy_response_formatter": "mistral-small",
+    "cobaya_response_formatter": "mistral-small",
+    "engineer_response_formatter": "deepseek/deepseek-chat-v3-0324:free",
+    "researcher_response_formatter": "deepseek/deepseek-chat-v3-0324:free",
+    "executor_response_formatter": "mistral-small",
 }
 
 
@@ -153,9 +158,11 @@ def get_api_keys_from_env():
         "GEMINI" : os.getenv("GEMINI_API_KEY"),
         "ANTHROPIC" : os.getenv("ANTHROPIC_API_KEY"),
 
+        # Free apis
         "OPENROUTER": os.getenv("OPENROUTER_API_KEY"),
         "ARLIAI": os.getenv("ARLIAI_API_KEY"),
-        "GROQ": os.getenv("GROQ_API_KEY")
+        "GROQ": os.getenv("GROQ_API_KEY"),
+        "MISTRAL": os.getenv("MISTRAL_API_KEY")
     }
     return api_keys
 
@@ -166,53 +173,65 @@ def get_model_config(model, api_keys=None):
         "api_type": None
     }
 
+    # old models
     if 'o3' in model:
         config.update({
             "reasoning_effort": "medium",
             "api_key": api_keys["OPENAI"],
             "api_type": "openai"
         })
-    elif "gemini" in model:
-        print("using gemini")
-        config.update({
-            #"model": "gemini-pro",
-            "api_key": api_keys["GEMINI"],
-            "api_type": "google",
-            #"base_url": "https://generativelanguage.googleapis.com/v1beta",
-            #"project_id": "cmbagent-466216"
-            
-        })
     elif "claude" in model:
         config.update({
             "api_key": api_keys["ANTHROPIC"],
             "api_type": "anthropic"
         })
-    elif "llama3" in model:
-        config.update({ 
-            "api_key": api_keys["GROQ"],
-            "api_type": "openai",  
-            "base_url": "https://api.groq.com/openai/v1"
-        })
-    elif "gpt" in model:  
+    elif "gpt" in model:
         config.update({
             "api_key": api_keys["OPENAI"],
             "api_type": "openai"
         })
 
-    elif "deepseek" in model:
-        config.update({
-            "api_key": api_keys["OPENROUTER"],
-            "api_type": "openai",  # openai-compatible schema
-            "base_url": "https://openrouter.ai/api/v1"
+    # new models
+    elif "llama" in model: 
+        config.update({ 
+            "api_key": api_keys["GROQ"],
+            "api_type": "groq",  
+            "tool_choice": "none",
+            "base_url": "https://api.groq.com",
         })
-    else:
+   
+    elif "mistral" in model:
+        config.update({
+            "api_key": api_keys.get("MISTRAL"),  
+            "api_type": "mistral",
+            "base_url": "https://api.mistral.ai/v1",
+            "tool_choice": "auto"
+        })
+    elif "Qwen" in model:
         config.update({
             "api_key": api_keys.get("ARLIAI"),
             "api_type": "openai",
-            "base_url": "https://api.arliai.com/v1"  
+            "base_url": "https://api.arliai.com/v1",
+            "tool_choice": "none"
+
         })
+    else:
+        config.update({
+            "api_key": api_keys["OPENROUTER"],
+            "api_type": "openai",  # openRouter is "fully openai compatible"
+            "base_url": "https://openrouter.ai/api/v1",
+            "tool_choice": "none"
+        })
+        '''
+        elif "gemini" in model:
+            config.update({
+                "api_key": api_keys["GEMINI"],
+                "api_type": "google",
+            })
+        '''
 
     return config
+
 
 api_keys_env = get_api_keys_from_env()
 
@@ -279,4 +298,3 @@ AAS_keywords_string = ', '.join(AAS_keywords_dict.keys())
 
 camb_context_url = "https://camb.readthedocs.io/en/latest/_static/camb_docs_combined.md"
 classy_context_url = "https://github.com/santiagocasas/clapp/tree/main/classy_docs.md"
-
