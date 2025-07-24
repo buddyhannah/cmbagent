@@ -33,11 +33,7 @@ if cmbagent_debug:
     print('path_to_assistants: ', path_to_assistants)
 path_to_agents = os.path.join(path_to_basedir, "agents/")
 
-# path_to_engineer = os.path.join(path_to_basedir, "engineer")
-# path_to_planner = os.path.join(path_to_basedir, "planner")
-# path_to_executor = os.path.join(path_to_basedir, "executor")
-# path_to_admin = os.path.join(path_to_basedir, "admin")
-
+# Work directory
 if "site-packages" in path_to_basedir or "dist-packages" in path_to_basedir:
     work_dir_default = os.path.join(os.getcwd(), "cmbagent_output")
     os.makedirs(work_dir_default, exist_ok=True)
@@ -111,44 +107,43 @@ file_search_max_num_results = autogen.file_search_max_num_results
 
 default_max_round = 50
 
-default_llm_model = "deepseek/deepseek-chat-v3-0324:free"
+default_llm_model = "mistral"
 
 '''
 Agents that use tool calling:
 engineer, researcher, idea_maker, idea_hater, camb_context, classy_context, aas_keyword_finder
 '''
 default_agents_llm_model = {
-    "engineer": "mistral-small",
-    "aas_keyword_finder": "llama-3.1-8b-instant", # Qwen3-235B-A22B
-    "task_improver": "mistral-small",
-    "task_recorder": "mistral-small",
-    "researcher": "llama-3.1-8b-instant",
-    "perplexity": "mistral-small",
-    "planner": "mistral-small",
-    "plan_reviewer": "google/gemini-2.0-flash-exp:free",
-    "idea_hater": "llama-3.1-8b-instant",
-    "idea_maker": "deepseek/deepseek-chat-v3-0324:free",
+    "engineer": "exaone",
+    "aas_keyword_finder": "groq",
+    "task_improver": "mistral",
+    "task_recorder": "mistral",
+    "researcher": "exaone",
+    "perplexity": "mistral",
+    "planner": "exaone",
+    "plan_reviewer": "groq",
+    "idea_hater": "groq",
+    "idea_maker": "deepseek",
     
     # rag agents
-    "classy_sz": "mistral-small",
-    "camb": "llama-3.1-8b-instant",
-    "classy": "mistral-small",
-    "cobaya": "mistral-small",
+    "classy_sz": "mistral",
+    "camb": "exaone",
+    "classy": "mistral",
+    "cobaya": "mistral",
     
-    "planck": "mistral-small",
+    "planck": "exaone",
     
-    "camb_context": "deepseek/deepseek-chat-v3-0324:free",
+    "camb_context": "deepseek",
     
     # formatting agents
-    "classy_sz_response_formatter": "deepseek/deepseek-chat-v3-0324:free",
-    "camb_response_formatter": "mistral-small",
-    "classy_response_formatter": "mistral-small",
-    "cobaya_response_formatter": "mistral-small",
-    "engineer_response_formatter": "deepseek/deepseek-chat-v3-0324:free",
-    "researcher_response_formatter": "deepseek/deepseek-chat-v3-0324:free",
-    "executor_response_formatter": "mistral-small",
+    "classy_sz_response_formatter": "deepseek",
+    "camb_response_formatter": "mistral",
+    "classy_response_formatter": "mistral",
+    "cobaya_response_formatter": "mistral",
+    "engineer_response_formatter": "deepseek",
+    "researcher_response_formatter": "deepseek",
+    "executor_response_formatter": "exaone",
 }
-
 
 default_agent_llm_configs = {}
 
@@ -159,87 +154,100 @@ def get_api_keys_from_env():
         "ANTHROPIC" : os.getenv("ANTHROPIC_API_KEY"),
 
         # Free apis
-        "OPENROUTER": os.getenv("OPENROUTER_API_KEY"),
+        "OPENROUTER": os.getenv("OPENROUTER_API_KEY"), # good
         "ARLIAI": os.getenv("ARLIAI_API_KEY"),
-        "GROQ": os.getenv("GROQ_API_KEY"),
-        "MISTRAL": os.getenv("MISTRAL_API_KEY")
+        "GROQ": os.getenv("GROQ_API_KEY"), # good
+        "MISTRAL": os.getenv("MISTRAL_API_KEY"),
+        "LLAMA": os.getenv("LLAMA_API_KEY"),
+        "TOGETHERAI": os.getenv("TOGETHERAI_API_KEY"), # good
     }
     return api_keys
 
+#Test cloudfare and Gemini 2.5 Pro 
+
 def get_model_config(model, api_keys=None):
-    config = {
-        "model": model,
-        "api_key":  None,
-        "api_type": None
-    }
-
-    # old models
-    if 'o3' in model:
-        config.update({
-            "reasoning_effort": "medium",
-            "api_key": api_keys["OPENAI"],
-            "api_type": "openai"
-        })
-    elif "claude" in model:
-        config.update({
-            "api_key": api_keys["ANTHROPIC"],
-            "api_type": "anthropic"
-        })
-    elif "gpt" in model:
-        config.update({
-            "api_key": api_keys["OPENAI"],
-            "api_type": "openai"
-        })
-
-    # new models
-    elif "llama" in model: 
-        config.update({ 
-            "api_key": api_keys["GROQ"],
-            "api_type": "groq",  
-            "tool_choice": "none",
-            "base_url": "https://api.groq.com",
-        })
-   
-    elif "mistral" in model:
-        config.update({
+    """Returns a list of ModelClient instances with fallback options"""
+    if api_keys is None:
+        api_keys = get_api_keys_from_env()
+    
+    all_configs = {
+        "mistral": {
+            "model": "mistral-small",
             "api_key": api_keys.get("MISTRAL"),  
-            "api_type": "mistral",
             "base_url": "https://api.mistral.ai/v1",
+            "api_type": "mistral",
             "tool_choice": "auto"
-        })
-    elif "Qwen" in model:
-        config.update({
+        },
+        "deepseek": {
+            "model": "deepseek/deepseek-chat-v3-0324:free",
+            "api_key": api_keys["OPENROUTER"],
+            "api_type": "openai",
+            "base_url": "https://openrouter.ai/api/v1",
+            "tool_choice": "none"
+        },
+        "groq": {
+            "model": "llama-3.1-8b-instant",
+            "api_key": api_keys["GROQ"],
+            "api_type": "groq",
+            "base_url": "https://api.groq.com",
+            "tool_choice": "none"
+        },
+        "qwen": {
+            "model": "Qwen3-14B",
             "api_key": api_keys.get("ARLIAI"),
             "api_type": "openai",
             "base_url": "https://api.arliai.com/v1",
             "tool_choice": "none"
+        },
+        "llama": {
+            "model": "Llama-4-Maverick-17B-128E-Instruct-FP8",
+            "api_key": api_keys.get("LLAMA"),
+            "api_type": "openai",
+            "base_url": "https://api.llama.com/compat/v1/",
+            "tool_choice":"none"
+        },
+        "exaone": {
+            "model": "lgai/exaone-deep-32b",
+            "api_key": api_keys.get("TOGETHERAI"),
+            "api_type": "together",
+            "base_url": "https://api.together.xyz/v1"
+        },
+        "google":{
+            "model": "gemini-2.5-flash",
+            "api_key": api_keys.get("GEMINI"),
+            "api_type": "google",
+        }
+    }
 
-        })
+    if "groq" in model:
+        configs = [all_configs["groq"], all_configs["exaone"], all_configs["llama"], all_configs["mistral"], all_configs["deepseek"], all_configs["qwen"]]
+    elif "mistral" in model:
+        configs = [all_configs["mistral"], all_configs["exaone"], all_configs["llama"], all_configs["deepseek"], all_configs["groq"], all_configs["qwen"]]
+    elif "Qwen" in model:
+        configs = [all_configs["qwen"], all_configs["exaone"], all_configs["llama"], all_configs["deepseek"],  all_configs["groq"], all_configs["mistral"]]
+    elif "llama" in model:
+        configs = [all_configs["llama"], all_configs["groq"], all_configs["deepseek"],  all_configs["mistral"], all_configs["exaone"], all_configs["qwen"]]
+    elif "exaone" in model:
+        configs = [all_configs["exaone"], all_configs["llama"], all_configs["groq"], all_configs["deepseek"],  all_configs["mistral"], all_configs["qwen"]]
+    elif "google" in model:
+        configs = [all_configs["google"]]
+    
+    # default to deepseek
     else:
-        config.update({
-            "api_key": api_keys["OPENROUTER"],
-            "api_type": "openai",  # openRouter is "fully openai compatible"
-            "base_url": "https://openrouter.ai/api/v1",
-            "tool_choice": "none"
-        })
-        '''
-        elif "gemini" in model:
-            config.update({
-                "api_key": api_keys["GEMINI"],
-                "api_type": "google",
-            })
-        '''
+        configs = [all_configs["deepseek"], all_configs["llama"], all_configs["mistral"],  all_configs["groq"], all_configs["exaone"], all_configs["qwen"]]
+        
+    return configs
 
-    return config
-
-
+# Initialize default_agent_llm_configs with list format
 api_keys_env = get_api_keys_from_env()
+default_agent_llm_configs = {
+    agent: get_model_config(model, api_keys_env)
+    for agent, model in default_agents_llm_model.items()
+}
 
-for agent in default_agents_llm_model:
-    default_agent_llm_configs[agent] =  get_model_config(default_agents_llm_model[agent], api_keys_env)
+# Initialize default_llm_config_list with list format
+default_llm_config_list = get_model_config(default_llm_model, api_keys_env)
 
-
-default_llm_config_list = [get_model_config(default_llm_model, api_keys_env)]
 
 
 #### note we should be able to set the temperature for different agents, e.g., 
@@ -298,3 +306,4 @@ AAS_keywords_string = ', '.join(AAS_keywords_dict.keys())
 
 camb_context_url = "https://camb.readthedocs.io/en/latest/_static/camb_docs_combined.md"
 classy_context_url = "https://github.com/santiagocasas/clapp/tree/main/classy_docs.md"
+

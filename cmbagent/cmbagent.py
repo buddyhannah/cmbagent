@@ -202,10 +202,14 @@ class CMBAgent:
         llm_config_list = default_llm_config_list.copy()
 
         if llm_api_key is not None:
-            llm_config_list[0]['api_key'] = llm_api_key
-
+            # Update all configs in the list
+            for cfg in llm_config_list:
+                cfg['api_key'] = llm_api_key
+    
         if llm_api_type is not None:
-            llm_config_list[0]['api_type'] = llm_api_type
+            # Update all configs in the list
+            for cfg in llm_config_list:
+                cfg['api_type'] = llm_api_type
 
         self.llm_api_key = llm_config_list[0]['api_key']
         self.openai_api_key = os.getenv("OPENAI_API_KEY")
@@ -214,13 +218,15 @@ class CMBAgent:
 
         self.cache_seed = cache_seed
 
+
         self.llm_config = {
                         "cache_seed": self.cache_seed,  # change the cache_seed for different trials
                         "temperature": temperature,
                         "top_p": top_p,
                         "config_list": llm_config_list,
                         "timeout": timeout,
-                        "check_every_ms": None,
+                        "check_every_ms": None
+                        
                     }
         
         if autogen.cmbagent_debug:
@@ -236,15 +242,26 @@ class CMBAgent:
 
         self.agent_type = agent_type
 
-        self.agent_llm_configs = default_agent_llm_configs.copy()
+        self.agent_llm_configs = {
+        agent: {
+            "config_list": configs,  # The list from get_model_config()
+            "temperature": default_temperature,
+            "timeout": timeout
+            }
+            for agent, configs in default_agent_llm_configs.items()
+        }
         self.agent_llm_configs.update(agent_llm_configs)
 
+        # Hannah - format llm_configs.
         if api_keys is not None:
-
-            self.llm_config["config_list"][0] = get_model_config(self.llm_config["config_list"][0]["model"], api_keys)
-            
-            for agent in self.agent_llm_configs.keys():                
-                self.agent_llm_configs[agent] = get_model_config(self.agent_llm_configs[agent]["model"], api_keys)
+            for agent in self.agent_llm_configs:
+                if isinstance(self.agent_llm_configs[agent], list):
+                    # Already in correct format
+                    continue
+                elif 'model' in self.agent_llm_configs[agent]:
+                    # Convert old format to new format
+                    model = self.agent_llm_configs[agent]['model']
+                    self.agent_llm_configs[agent] = get_model_config(model, api_keys)
 
         self.init_agents(agent_llm_configs=self.agent_llm_configs) # initialize agents
 
@@ -510,11 +527,7 @@ class CMBAgent:
               step = None,
               max_rounds=10):
         
-        print("[DEBUG] solve: Initial task =", task)
-        print("[DEBUG] solve: initial_agent =", initial_agent)
-        print("[DEBUG] solve: shared_context input =", shared_context)
 
-        
         self.step = step ## record the step for the context carryover workflow 
         this_shared_context = copy.deepcopy(self.shared_context)
         
@@ -538,7 +551,6 @@ class CMBAgent:
             if initial_agent == 'perplexity':
                 one_shot_shared_context['perplexity_query'] = self.get_agent_object_from_name('perplexity').info['instructions'].format(main_task=task)
                 print('one_shot_shared_context: ', one_shot_shared_context)
-                print("[DEBUG] solve: Constructing perplexity query")
             
             this_shared_context.update(one_shot_shared_context)
             this_shared_context.update(shared_context or {})
@@ -599,12 +611,11 @@ class CMBAgent:
                                       "name": "main_cmbagent_chat"},
             )
 
-     
         chat_result, context_variables, last_agent = initiate_group_chat(
             pattern=agent_pattern,
             messages=this_shared_context['main_task'],
             # user_agent=self.get_agent_from_name("admin"),
-            max_rounds = max_rounds,
+            max_rounds = max_rounds,      
         )
 
         self.final_context = copy.deepcopy(context_variables)
@@ -612,6 +623,147 @@ class CMBAgent:
         self.last_agent = last_agent
         self.chat_result = chat_result
 
+
+    '''
+    def solve(self, task, 
+              initial_agent='task_improver', 
+              shared_context=None,
+              mode = "default", # can be "one_shot" or "default" (default is planning and control)
+              step = None,
+              max_rounds=10):
+        
+        #print("[DEBUG] solve: Initial task =", task)
+        #print("[DEBUG] solve: initial_agent =", initial_agent)
+        #print("[DEBUG] solve: shared_context input =", shared_context)
+
+        
+        self.step = step ## record the step for the context carryover workflow 
+        this_shared_context = copy.deepcopy(self.shared_context)
+        
+        if mode == "one_shot" or mode == "chat":
+            one_shot_shared_context = {'final_plan': "Step 1: solve the main task.",
+                                        'current_status': "In progress",
+                                        'current_plan_step_number': 1,
+                                        'current_sub_task' : "solve the main task.",
+                                        'current_instructions': "solve the main task.",
+                                        'agent_for_sub_task': initial_agent,
+                                        'feedback_left': 0,
+                                        "number_of_steps_in_plan": 1,
+                                        'maximum_number_of_steps_in_plan': 1,
+                                        'researcher_append_instructions': '',
+                                        'engineer_append_instructions': '',
+                                        'perplexity_append_instructions': '',
+                                        'idea_maker_append_instructions': '',
+                                        'idea_hater_append_instructions': '',
+                                        }
+            
+            if initial_agent == 'perplexity':
+                one_shot_shared_context['perplexity_query'] = self.get_agent_object_from_name('perplexity').info['instructions'].format(main_task=task)
+                # print('one_shot_shared_context: ', one_shot_shared_context)
+                #print("[DEBUG] solve: Constructing perplexity query")
+            
+            this_shared_context.update(one_shot_shared_context)
+            this_shared_context.update(shared_context or {})
+
+            # print('one_shot_shared_context: ', one_shot_shared_context)
+            # print('shared_context: ', this_shared_context)
+            # sys.exit()
+            
+        else:
+            if shared_context is not None:
+                this_shared_context.update(shared_context)
+        
+        try:
+            self.clear_cache() ## obsolete
+            # import pdb; pdb.set_trace()
+        except:
+            pass
+        if self.clear_work_dir_bool:
+            self.clear_work_dir()
+
+        # Define full paths
+        database_full_path = os.path.join(self.work_dir, this_shared_context.get("database_path", "data"))
+        codebase_full_path = os.path.join(self.work_dir, this_shared_context.get("codebase_path", "codebase"))
+
+        chat_full_path = os.path.join(self.work_dir, "chats")
+        time_full_path = os.path.join(self.work_dir, "time")
+        cost_full_path = os.path.join(self.work_dir, "cost")
+        
+        # Create directories if they don't exist
+        os.makedirs(database_full_path, exist_ok=True)
+        os.makedirs(codebase_full_path, exist_ok=True)
+
+        os.makedirs(chat_full_path, exist_ok=True)
+        os.makedirs(time_full_path, exist_ok=True)
+        os.makedirs(cost_full_path, exist_ok=True)
+
+        for agent in self.agents:
+            try:
+                agent.agent.reset()
+            except:
+                pass
+
+        this_shared_context['main_task'] = task
+        this_shared_context['improved_main_task'] = task # initialize improved main task
+
+        this_shared_context['work_dir'] = self.work_dir
+        # print('this_shared_context: ', this_shared_context)
+        # sys.exit()
+
+        context_variables = ContextVariables(data=this_shared_context)
+
+        # Create the pattern
+        agent_pattern = AutoPattern(
+                agents=[agent.agent for agent in self.agents],
+                initial_agent=self.get_agent_from_name(initial_agent),
+                context_variables=context_variables,
+                group_manager_args = {"llm_config": self.llm_config, 
+                                      "name": "main_cmbagent_chat"},
+            )
+        
+
+        # Hannah -create GroupChat with proper speaker selection
+        groupchat = autogen.GroupChat(
+            agents=[agent.agent for agent in self.agents],
+            messages=[],
+            max_round=max_rounds,
+            speaker_selection_method="round_robin",  
+        )
+        
+        # Create manager
+        manager = autogen.GroupChatManager(
+            groupchat=groupchat,
+            llm_config=self.llm_config,
+            name="main_cmbagent_chat"
+        )
+        
+        # Initiate chat
+        chat_result = manager.initiate_chat(
+            self.get_agent_object_from_name(initial_agent).agent,
+            message=task,
+            max_round=max_rounds
+        )
+        
+        self.final_context = copy.deepcopy(context_variables)
+
+        if chat_result.chat_history:
+            self.last_agent = chat_result.chat_history[-1]["name"]
+        else:
+            self.last_agent = initial_agent
+
+        self.chat_result = chat_result
+
+
+        ## save the chat history and the final context
+        chat_history_path = os.path.join(chat_full_path, f"chat_history_step_{step if step is not None else 0}.json")
+        with open(chat_history_path, 'w') as f:
+            json.dump({
+                'task': task,
+                'chat_history': groupchat.messages,  # Using groupchat.messages instead of results['chat_history']
+                'final_agent': self.last_agent,
+                'timestamp': datetime.now().isoformat()
+            }, f, indent=2)
+    '''
     
     def get_agent_object_from_name(self,name):
         for agent in self.agents:
@@ -710,24 +862,42 @@ class CMBAgent:
 
             if agent_name in agent_llm_configs:
                 llm_config = copy.deepcopy(self.llm_config)
-                llm_config['config_list'][0].update(agent_llm_configs[agent_name])
-
-                if "reasoning_effort" in llm_config['config_list'][0]:
-                    llm_config.pop('temperature')
-                    llm_config.pop('top_p')
-
-                if llm_config['config_list'][0]['api_type'] == 'google':
-                    llm_config.pop('top_p') 
                 
+                # Get the agent's specific config
+                agent_config = agent_llm_configs[agent_name]
+                
+        
+                # Handle both list and dict formats
+                if isinstance(agent_config, list):
+                    # If it's a list, use it directly as the config_list
+                    llm_config['config_list'] = agent_config
+                elif isinstance(agent_config, dict):
+                    if 'config_list' in agent_config:
+                        # New format with config_list key
+                        llm_config['config_list'] = agent_config['config_list']
+                    else:
+                        # Old format - single config dict
+                        # Create a new config list with this config first, then fallbacks
+                        llm_config['config_list'] = [agent_config] + llm_config['config_list'][1:]
+                
+                # Handle special cases
+                if "reasoning_effort" in llm_config['config_list'][0]:
+                    llm_config.pop('temperature', None)
+                    llm_config.pop('top_p', None)
+
+                if llm_config['config_list'][0].get('api_type') == 'google':
+                    llm_config.pop('top_p', None)
+                    
                 if cmbagent_debug:
-                    print('in cmbagent.py: found agent_llm_configs for: ', agent_name)
-                    print('in cmbagent.py: llm_config updated to: ', llm_config)
+                    print('Found agent_llm_configs for: ', agent_name)
+                    print('llm_config updated to: ', llm_config)
             else:
                 llm_config = copy.deepcopy(self.llm_config)
 
             if cmbagent_debug:
-                print('in cmbagent.py BEFORE agent_instance: llm_config: ', llm_config)
-
+                print('BEFORE agent_instance: llm_config: ', llm_config)
+         
+         
             agent_instance = agent_class(llm_config=llm_config,agent_type=self.agent_type, work_dir=self.work_dir)
 
             if cmbagent_debug:
@@ -1543,24 +1713,18 @@ def one_shot(
             ):
     start_time = time.time()
 
-    print("[DEBUG] one_shot: task =", task)
-    print("[DEBUG] one_shot: agent =", agent)
-
     if api_keys is None:
         api_keys = get_api_keys_from_env()
     
-    engineer_config = get_model_config(engineer_model, api_keys)
+    engineer_config= get_model_config(engineer_model, api_keys)
     researcher_config = get_model_config(researcher_model, api_keys)
-        
-    print("[DEBUG] one_shot: engineer_model =", engineer_model)
-    print("[DEBUG] one_shot: researcher_model =", researcher_model)
-
+    
     cmbagent = CMBAgent(
         mode = "one_shot",
         work_dir = work_dir,
         agent_llm_configs = {
-                            'engineer': engineer_config,
-                            'researcher': researcher_config,
+            'engineer': engineer_config,
+            'researcher': researcher_config,
         },
         api_keys = api_keys
         )
@@ -1573,7 +1737,6 @@ def one_shot(
     shared_context = {'max_n_attempts': max_n_attempts}
 
     if agent == 'camb_context':
-        print("[DEBUG] one_shot: Fetching camb_context...")
         # Fetch the file (30-second safety timeout)
         resp = requests.get(camb_context_url, timeout=30) # use something different different... debug this lines
         resp.raise_for_status()           # Raises an HTTPError for non-200 codes
@@ -1583,7 +1746,6 @@ def one_shot(
 
 
     if agent == 'classy_context':
-        print("[DEBUG] one_shot: Fetching classy_context...")
         # Fetch the file (30-second safety timeout)
         resp = requests.get(classy_context_url, timeout=30)
         resp.raise_for_status()           # Raises an HTTPError for non-200 codes
@@ -1605,9 +1767,7 @@ def one_shot(
                     mode = "one_shot",
                     shared_context = shared_context
                     )
-    
-    print("[DEBUG] one_shot: shared_context =", shared_context)
-    
+ 
     end_time = time.time()
     execution_time = end_time - start_time
     
