@@ -222,7 +222,7 @@ class CMBAgent:
         self.llm_config = {
                         "cache_seed": self.cache_seed,  # change the cache_seed for different trials
                         "temperature": temperature,
-                        "top_p": top_p,
+                        # "top_p": top_p,
                         "config_list": llm_config_list,
                         "timeout": timeout,
                         "check_every_ms": None
@@ -870,7 +870,7 @@ class CMBAgent:
                 # Handle both list and dict formats
                 if isinstance(agent_config, list):
                     # If it's a list, use it directly as the config_list
-                    llm_config['config_list'] = agent_config
+                    llm_config['config_list'] = [copy.deepcopy(cfg) for cfg in agent_config]
                 elif isinstance(agent_config, dict):
                     if 'config_list' in agent_config:
                         # New format with config_list key
@@ -885,8 +885,6 @@ class CMBAgent:
                     llm_config.pop('temperature', None)
                     llm_config.pop('top_p', None)
 
-                if llm_config['config_list'][0].get('api_type') == 'google':
-                    llm_config.pop('top_p', None)
                     
                 if cmbagent_debug:
                     print('Found agent_llm_configs for: ', agent_name)
@@ -1828,8 +1826,8 @@ def human_in_the_loop(task,
          work_dir = work_dir_default,
          max_rounds = 50,
          max_n_attempts = 3,
-         engineer_model = 'gpt-4o-2024-11-20',
-         researcher_model = 'gpt-4o-2024-11-20',
+         engineer_model = default_agents_llm_model['engineer'],
+         researcher_model = default_agents_llm_model['researcher'],
          agent = 'engineer',
          api_keys = None,
          ):

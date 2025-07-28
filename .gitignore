@@ -75,3 +75,21 @@ docs/notebooks/astropilot_data/plots/.DS_Store
 gui_expt.py
 tests/Project*
 project_dir
+
+# Ignore everything in the virtual environment
+cmbagent_env/**
+
+# Unignore only the autogen/oai path
+!cmbagent_env/lib/
+cmbagent_env/lib/**    # Re-ignore everything under lib
+!cmbagent_env/lib/python3.12/
+cmbagent_env/lib/python3.12/**  # Re-ignore rest
+!cmbagent_env/lib/python3.12/site-packages/
+cmbagent_env/lib/python3.12/site-packages/**  # Re-ignore again
+!cmbagent_env/lib/python3.12/site-packages/autogen/
+cmbagent_env/lib/python3.12/site-packages/autogen/**  # Re-ignore again
+!cmbagent_env/lib/python3.12/site-packages/autogen/oai/
+!cmbagent_env/lib/python3.12/site-packages/autogen/oai/**
+
+
+

@@ -16,7 +16,6 @@ logging.basicConfig(level=logging.INFO, format='[%(name)s] %(message)s')
 cmbagent_debug = autogen.cmbagent_debug
 
 
-
 # Get the path of the current file
 path_to_basedir = os.path.dirname(os.path.abspath(__file__))
 if cmbagent_debug:
@@ -116,28 +115,28 @@ engineer, researcher, idea_maker, idea_hater, camb_context, classy_context, aas_
 default_agents_llm_model = {
     "engineer": "exaone",
     "aas_keyword_finder": "groq",
-    "task_improver": "mistral",
-    "task_recorder": "mistral",
-    "researcher": "exaone",
-    "perplexity": "mistral",
+    "task_improver": "exaone",
+    "task_recorder": "exaone",
+    "researcher": "groq",
+    "perplexity": "exaone",
     "planner": "exaone",
-    "plan_reviewer": "groq",
+    "plan_reviewer": "mistral",
     "idea_hater": "groq",
     "idea_maker": "deepseek",
     
     # rag agents
     "classy_sz": "mistral",
-    "camb": "exaone",
+    "camb": "mistral",
     "classy": "mistral",
     "cobaya": "mistral",
     
-    "planck": "exaone",
+    "planck": "mistral",
     
     "camb_context": "deepseek",
     
     # formatting agents
     "classy_sz_response_formatter": "deepseek",
-    "camb_response_formatter": "mistral",
+    "camb_response_formatter": "groq",
     "classy_response_formatter": "mistral",
     "cobaya_response_formatter": "mistral",
     "engineer_response_formatter": "deepseek",
@@ -150,7 +149,7 @@ default_agent_llm_configs = {}
 def get_api_keys_from_env():
     api_keys = {
         "OPENAI" : os.getenv("OPENAI_API_KEY"),
-        "GEMINI" : os.getenv("GEMINI_API_KEY"),
+        "GEMINI" : os.getenv("GEMINI_API_KEY"), # X requires billing to be enabled
         "ANTHROPIC" : os.getenv("ANTHROPIC_API_KEY"),
 
         # Free apis
@@ -172,45 +171,51 @@ def get_model_config(model, api_keys=None):
     
     all_configs = {
         "mistral": {
-            "model": "mistral-small",
+            "model": "mistral-small-latest",
             "api_key": api_keys.get("MISTRAL"),  
             "base_url": "https://api.mistral.ai/v1",
             "api_type": "mistral",
-            "tool_choice": "auto"
+            "tool_choice": "none", # set to none to avoid error
+            "top_p": default_top_p
         },
         "deepseek": {
             "model": "deepseek/deepseek-chat-v3-0324:free",
             "api_key": api_keys["OPENROUTER"],
             "api_type": "openai",
             "base_url": "https://openrouter.ai/api/v1",
-            "tool_choice": "none"
+            "tool_choice": "none",
+            "top_p": default_top_p
         },
         "groq": {
             "model": "llama-3.1-8b-instant",
             "api_key": api_keys["GROQ"],
             "api_type": "groq",
             "base_url": "https://api.groq.com",
-            "tool_choice": "none"
+            "tool_choice": "none",
+            "top_p": default_top_p
         },
         "qwen": {
             "model": "Qwen3-14B",
             "api_key": api_keys.get("ARLIAI"),
             "api_type": "openai",
             "base_url": "https://api.arliai.com/v1",
-            "tool_choice": "none"
+            "tool_choice": "none",
+            "top_p": default_top_p
         },
         "llama": {
             "model": "Llama-4-Maverick-17B-128E-Instruct-FP8",
             "api_key": api_keys.get("LLAMA"),
             "api_type": "openai",
             "base_url": "https://api.llama.com/compat/v1/",
-            "tool_choice":"none"
+            "tool_choice":"none",
+        
         },
         "exaone": {
             "model": "lgai/exaone-deep-32b",
             "api_key": api_keys.get("TOGETHERAI"),
             "api_type": "together",
-            "base_url": "https://api.together.xyz/v1"
+            "base_url": "https://api.together.xyz/v1",
+            "top_p": default_top_p
         },
         "google":{
             "model": "gemini-2.5-flash",
@@ -223,7 +228,7 @@ def get_model_config(model, api_keys=None):
         configs = [all_configs["groq"], all_configs["exaone"], all_configs["llama"], all_configs["mistral"], all_configs["deepseek"], all_configs["qwen"]]
     elif "mistral" in model:
         configs = [all_configs["mistral"], all_configs["exaone"], all_configs["llama"], all_configs["deepseek"], all_configs["groq"], all_configs["qwen"]]
-    elif "Qwen" in model:
+    elif "qwen" in model:
         configs = [all_configs["qwen"], all_configs["exaone"], all_configs["llama"], all_configs["deepseek"],  all_configs["groq"], all_configs["mistral"]]
     elif "llama" in model:
         configs = [all_configs["llama"], all_configs["groq"], all_configs["deepseek"],  all_configs["mistral"], all_configs["exaone"], all_configs["qwen"]]
