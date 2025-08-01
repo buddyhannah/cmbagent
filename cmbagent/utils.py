@@ -106,59 +106,86 @@ file_search_max_num_results = autogen.file_search_max_num_results
 
 default_max_round = 50
 
-default_llm_model = "mistral"
+default_llm_model = "llama"
 
 '''
 Agents that use tool calling:
 engineer, researcher, idea_maker, idea_hater, camb_context, classy_context, aas_keyword_finder
 '''
 default_agents_llm_model = {
-    "engineer": "exaone",
-    "aas_keyword_finder": "groq",
+    "engineer": "llama_tool",
+    "aas_keyword_finder": "groq_tool",
     "task_improver": "exaone",
-    "task_recorder": "exaone",
-    "researcher": "groq",
+    "task_recorder": "llama_tool",
+    "researcher": "groq_tool",
     "perplexity": "exaone",
-    "planner": "exaone",
-    "plan_reviewer": "mistral",
-    "idea_hater": "groq",
-    "idea_maker": "deepseek",
+    "planner": "qwen",
+    "plan_reviewer": "groq",
+    "idea_hater": "groq_tool",
+    "idea_maker": "mistral_tool",
     
     # rag agents
-    "classy_sz": "mistral",
-    "camb": "mistral",
-    "classy": "mistral",
-    "cobaya": "mistral",
+    "classy_sz": "llama_tool",
+    "camb": "mistral_tool",
+    "classy": "llama_tool",
+    "cobaya": "llama_tool",
     
-    "planck": "mistral",
+    "planck": "llama_tool",
     
-    "camb_context": "deepseek",
+    "camb_context": "deepseek_tool",
+
+    # HANNAH -ADDED
+    "plan_setter": "groq_tool", # Uses tool call to run record_plan_constraints?
+    "classy_context": "exaone", 
+    "control": "deepseek_tool", # no response. Call record_status tool
+    "control_starter": "deepseek_tool", # no response. Call record_status tool
+    "engineer_nest": "llama", # trigger nested chat for engineer agent.
+    "executor": "groq_tool", # ??????????????? Execution requires tool calling?
+    "execute_bash": "mistral_tool", # execute code from installer
+    "idea_hater_response_formatter": "llama", # format response from idea hater
+    "idea_saver": "groq_tool", # no response. Call tool record_ideas 
+    "plan_recorder":"deepseek_tool", # no response. Call tool record_plan
+    "plot_judge":"groq_tool", # call_vlm_judge tool 
+    "researcher_executor":"llama_tool", # save content provided by the researcher
+    "review_recorder":"groq_tool",  # No response. Call tool record_review
     
     # formatting agents
+
     "classy_sz_response_formatter": "deepseek",
     "camb_response_formatter": "groq",
-    "classy_response_formatter": "mistral",
-    "cobaya_response_formatter": "mistral",
+    "classy_response_formatter": "llama",
+    "cobaya_response_formatter": "llama",
     "engineer_response_formatter": "deepseek",
     "researcher_response_formatter": "deepseek",
     "executor_response_formatter": "exaone",
+    
+
+   
 }
+'''
+"classy_sz_response_formatter": "cloudflare",
+    "camb_response_formatter": "cloudflare",
+    "classy_response_formatter": "cloudflare",
+    "cobaya_response_formatter": "cloudflare",
+    "engineer_response_formatter": "cloudflare",
+    "researcher_response_formatter": "cloudflare",
+    "executor_response_formatter": "cloudflare",
+    
+'''
 
 default_agent_llm_configs = {}
 
 def get_api_keys_from_env():
     api_keys = {
-        "OPENAI" : os.getenv("OPENAI_API_KEY"),
-        "GEMINI" : os.getenv("GEMINI_API_KEY"), # X requires billing to be enabled
-        "ANTHROPIC" : os.getenv("ANTHROPIC_API_KEY"),
-
         # Free apis
         "OPENROUTER": os.getenv("OPENROUTER_API_KEY"), # good
         "ARLIAI": os.getenv("ARLIAI_API_KEY"),
         "GROQ": os.getenv("GROQ_API_KEY"), # good
-        "MISTRAL": os.getenv("MISTRAL_API_KEY"),
-        "LLAMA": os.getenv("LLAMA_API_KEY"),
+        "MISTRAL": os.getenv("MISTRAL_API_KEY"), 
+        "LLAMA": os.getenv("LLAMA_API_KEY"), # good
         "TOGETHERAI": os.getenv("TOGETHERAI_API_KEY"), # good
+        "CLOUDFLARE": os.getenv("CLOUDFLARE_API_KEY"),
+        "CLOUDFLARE_ACCOUNT_ID": os.getenv("CLOUDFLARE_ACCOUNT_ID")
     }
     return api_keys
 
@@ -170,12 +197,46 @@ def get_model_config(model, api_keys=None):
         api_keys = get_api_keys_from_env()
     
     all_configs = {
-        "mistral": {
+        # require tool calling
+        "mistral_tool": {
             "model": "mistral-small-latest",
             "api_key": api_keys.get("MISTRAL"),  
             "base_url": "https://api.mistral.ai/v1",
             "api_type": "mistral",
-            "tool_choice": "none", # set to none to avoid error
+            "tool_choice": "any", 
+            "top_p": default_top_p
+        },
+        "deepseek_tool": {
+            "model": "deepseek/deepseek-chat-v3-0324:free",
+            "api_key": api_keys["OPENROUTER"],
+            "api_type": "openai",
+            "base_url": "https://openrouter.ai/api/v1",
+            "tool_choice": "required",
+            "top_p": default_top_p
+        },
+        "groq_tool": {
+            "model": "llama-3.1-8b-instant",
+            "api_key": api_keys["GROQ"],
+            "api_type": "groq",
+            "base_url": "https://api.groq.com",
+            "tool_choice": "required",
+            "top_p": default_top_p
+        },
+        "llama_tool": {
+            "model": "Llama-4-Maverick-17B-128E-Instruct-FP8",
+            "api_key": api_keys.get("LLAMA"),
+            "api_type": "openai",
+            "base_url": "https://api.llama.com/compat/v1/",
+            "tool_choice":"required",
+            "top_p": default_top_p
+        },
+        
+        "mistral": {
+            "model": "mistral-small",
+            "api_key": api_keys.get("MISTRAL"), 
+            "base_url": "https://api.mistral.ai/v1",
+            "api_type": "mistral",
+            "tool_choice": "none", 
             "top_p": default_top_p
         },
         "deepseek": {
@@ -194,6 +255,22 @@ def get_model_config(model, api_keys=None):
             "tool_choice": "none",
             "top_p": default_top_p
         },
+        "llama": {
+            "model": "Llama-4-Maverick-17B-128E-Instruct-FP8",
+            "api_key": api_keys.get("LLAMA"),
+            "api_type": "openai",
+            "base_url": "https://api.llama.com/compat/v1/",
+            "tool_choice":"none",
+            "top_p": default_top_p
+        },
+        "exaone": {
+            "model": "lgai/exaone-deep-32b",
+            "api_key": api_keys.get("TOGETHERAI"),
+            "api_type": "together",
+            "base_url": "https://api.together.xyz/v1",
+            "top_p": default_top_p,
+            
+        },
         "qwen": {
             "model": "Qwen3-14B",
             "api_key": api_keys.get("ARLIAI"),
@@ -202,44 +279,35 @@ def get_model_config(model, api_keys=None):
             "tool_choice": "none",
             "top_p": default_top_p
         },
-        "llama": {
-            "model": "Llama-4-Maverick-17B-128E-Instruct-FP8",
-            "api_key": api_keys.get("LLAMA"),
+        "cloudflare": {
+            "model": "@cf/meta/llama-3.1-8b-instruct-fast", #"@hf/thebloke/deepseek-coder-6.7b-instruct-awq",  
+            "api_key": api_keys.get("CLOUDFLARE"),
             "api_type": "openai",
-            "base_url": "https://api.llama.com/compat/v1/",
-            "tool_choice":"none",
-        
+            "base_url": f"https://api.cloudflare.com/client/v4/accounts/{api_keys.get('CLOUDFLARE_ACCOUNT_ID')}/ai/v1",
+            # "response_format": { "type": "json_object" }, 
         },
-        "exaone": {
-            "model": "lgai/exaone-deep-32b",
-            "api_key": api_keys.get("TOGETHERAI"),
-            "api_type": "together",
-            "base_url": "https://api.together.xyz/v1",
-            "top_p": default_top_p
-        },
-        "google":{
-            "model": "gemini-2.5-flash",
-            "api_key": api_keys.get("GEMINI"),
-            "api_type": "google",
-        }
+
     }
 
+
+    hasTool = "_tool" if  "tool" in model else '' 
     if "groq" in model:
-        configs = [all_configs["groq"], all_configs["exaone"], all_configs["llama"], all_configs["mistral"], all_configs["deepseek"], all_configs["qwen"]]
+        configs = [all_configs[f"groq{hasTool}"], all_configs[f"llama{hasTool}"], all_configs[f"mistral{hasTool}"], all_configs[f"deepseek{hasTool}"]]
     elif "mistral" in model:
-        configs = [all_configs["mistral"], all_configs["exaone"], all_configs["llama"], all_configs["deepseek"], all_configs["groq"], all_configs["qwen"]]
-    elif "qwen" in model:
-        configs = [all_configs["qwen"], all_configs["exaone"], all_configs["llama"], all_configs["deepseek"],  all_configs["groq"], all_configs["mistral"]]
+        configs = [all_configs[f"mistral{hasTool}"], all_configs[f"deepseek{hasTool}"], all_configs[f"groq{hasTool}"], all_configs[f"llama{hasTool}"]]
     elif "llama" in model:
-        configs = [all_configs["llama"], all_configs["groq"], all_configs["deepseek"],  all_configs["mistral"], all_configs["exaone"], all_configs["qwen"]]
+        configs = [all_configs[f"llama{hasTool}"], all_configs[f"mistral{hasTool}"], all_configs[f"deepseek{hasTool}"], all_configs[f"groq{hasTool}"]]
+    elif "deepseek" in model:
+        configs = [all_configs[f"deepseek{hasTool}"], all_configs[f"groq{hasTool}"], all_configs[f"llama{hasTool}"], all_configs[f"mistral{hasTool}"]]
+    elif "cloudflare" in model:
+        configs=[all_configs[f"cloudflare{hasTool}"]]
+    # no tool calling
     elif "exaone" in model:
-        configs = [all_configs["exaone"], all_configs["llama"], all_configs["groq"], all_configs["deepseek"],  all_configs["mistral"], all_configs["qwen"]]
-    elif "google" in model:
-        configs = [all_configs["google"]]
-    
-    # default to deepseek
+        configs = [all_configs["exaone"], all_configs["llama"], all_configs["groq"], all_configs[f"cloudflare"], all_configs["deepseek"],  all_configs["mistral"], all_configs["qwen"]]
+    elif "qwen" in model:
+        configs = [all_configs["qwen"], all_configs["exaone"], all_configs["llama"], all_configs["deepseek"],  all_configs["groq"], all_configs["cloudflare"], all_configs["mistral"]]
     else:
-        configs = [all_configs["deepseek"], all_configs["llama"], all_configs["mistral"],  all_configs["groq"], all_configs["exaone"], all_configs["qwen"]]
+        raise ValueError(f"Invalid model {model}")
         
     return configs
 

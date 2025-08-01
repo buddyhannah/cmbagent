@@ -182,16 +182,24 @@ class CMBAgent:
             self.agent_list.append('memory')
 
         self.verbose = verbose
-
-        if work_dir != work_dir_default:
+        
+        print(f"work_dir {work_dir}")
+        print(f"default_work_dir {work_dir_default}")
+       
+        # Hannah - don't delete default_work_dir if  work_dir is its child
+        try:
+            Path(work_dir).relative_to(Path(work_dir_default).resolve())
+        except ValueError:
             # delete work_dir_default as it wont be used
             shutil.rmtree(work_dir_default, ignore_errors=True)
+
 
         self.work_dir = work_dir
         self.clear_work_dir_bool = clear_work_dir
         if clear_work_dir:
             self.clear_work_dir()
         
+    
         # add the work_dir to the python path so we can import modules from it
         sys.path.append(self.work_dir)
 
@@ -623,147 +631,6 @@ class CMBAgent:
         self.last_agent = last_agent
         self.chat_result = chat_result
 
-
-    '''
-    def solve(self, task, 
-              initial_agent='task_improver', 
-              shared_context=None,
-              mode = "default", # can be "one_shot" or "default" (default is planning and control)
-              step = None,
-              max_rounds=10):
-        
-        #print("[DEBUG] solve: Initial task =", task)
-        #print("[DEBUG] solve: initial_agent =", initial_agent)
-        #print("[DEBUG] solve: shared_context input =", shared_context)
-
-        
-        self.step = step ## record the step for the context carryover workflow 
-        this_shared_context = copy.deepcopy(self.shared_context)
-        
-        if mode == "one_shot" or mode == "chat":
-            one_shot_shared_context = {'final_plan': "Step 1: solve the main task.",
-                                        'current_status': "In progress",
-                                        'current_plan_step_number': 1,
-                                        'current_sub_task' : "solve the main task.",
-                                        'current_instructions': "solve the main task.",
-                                        'agent_for_sub_task': initial_agent,
-                                        'feedback_left': 0,
-                                        "number_of_steps_in_plan": 1,
-                                        'maximum_number_of_steps_in_plan': 1,
-                                        'researcher_append_instructions': '',
-                                        'engineer_append_instructions': '',
-                                        'perplexity_append_instructions': '',
-                                        'idea_maker_append_instructions': '',
-                                        'idea_hater_append_instructions': '',
-                                        }
-            
-            if initial_agent == 'perplexity':
-                one_shot_shared_context['perplexity_query'] = self.get_agent_object_from_name('perplexity').info['instructions'].format(main_task=task)
-                # print('one_shot_shared_context: ', one_shot_shared_context)
-                #print("[DEBUG] solve: Constructing perplexity query")
-            
-            this_shared_context.update(one_shot_shared_context)
-            this_shared_context.update(shared_context or {})
-
-            # print('one_shot_shared_context: ', one_shot_shared_context)
-            # print('shared_context: ', this_shared_context)
-            # sys.exit()
-            
-        else:
-            if shared_context is not None:
-                this_shared_context.update(shared_context)
-        
-        try:
-            self.clear_cache() ## obsolete
-            # import pdb; pdb.set_trace()
-        except:
-            pass
-        if self.clear_work_dir_bool:
-            self.clear_work_dir()
-
-        # Define full paths
-        database_full_path = os.path.join(self.work_dir, this_shared_context.get("database_path", "data"))
-        codebase_full_path = os.path.join(self.work_dir, this_shared_context.get("codebase_path", "codebase"))
-
-        chat_full_path = os.path.join(self.work_dir, "chats")
-        time_full_path = os.path.join(self.work_dir, "time")
-        cost_full_path = os.path.join(self.work_dir, "cost")
-        
-        # Create directories if they don't exist
-        os.makedirs(database_full_path, exist_ok=True)
-        os.makedirs(codebase_full_path, exist_ok=True)
-
-        os.makedirs(chat_full_path, exist_ok=True)
-        os.makedirs(time_full_path, exist_ok=True)
-        os.makedirs(cost_full_path, exist_ok=True)
-
-        for agent in self.agents:
-            try:
-                agent.agent.reset()
-            except:
-                pass
-
-        this_shared_context['main_task'] = task
-        this_shared_context['improved_main_task'] = task # initialize improved main task
-
-        this_shared_context['work_dir'] = self.work_dir
-        # print('this_shared_context: ', this_shared_context)
-        # sys.exit()
-
-        context_variables = ContextVariables(data=this_shared_context)
-
-        # Create the pattern
-        agent_pattern = AutoPattern(
-                agents=[agent.agent for agent in self.agents],
-                initial_agent=self.get_agent_from_name(initial_agent),
-                context_variables=context_variables,
-                group_manager_args = {"llm_config": self.llm_config, 
-                                      "name": "main_cmbagent_chat"},
-            )
-        
-
-        # Hannah -create GroupChat with proper speaker selection
-        groupchat = autogen.GroupChat(
-            agents=[agent.agent for agent in self.agents],
-            messages=[],
-            max_round=max_rounds,
-            speaker_selection_method="round_robin",  
-        )
-        
-        # Create manager
-        manager = autogen.GroupChatManager(
-            groupchat=groupchat,
-            llm_config=self.llm_config,
-            name="main_cmbagent_chat"
-        )
-        
-        # Initiate chat
-        chat_result = manager.initiate_chat(
-            self.get_agent_object_from_name(initial_agent).agent,
-            message=task,
-            max_round=max_rounds
-        )
-        
-        self.final_context = copy.deepcopy(context_variables)
-
-        if chat_result.chat_history:
-            self.last_agent = chat_result.chat_history[-1]["name"]
-        else:
-            self.last_agent = initial_agent
-
-        self.chat_result = chat_result
-
-
-        ## save the chat history and the final context
-        chat_history_path = os.path.join(chat_full_path, f"chat_history_step_{step if step is not None else 0}.json")
-        with open(chat_history_path, 'w') as f:
-            json.dump({
-                'task': task,
-                'chat_history': groupchat.messages,  # Using groupchat.messages instead of results['chat_history']
-                'final_agent': self.last_agent,
-                'timestamp': datetime.now().isoformat()
-            }, f, indent=2)
-    '''
     
     def get_agent_object_from_name(self,name):
         for agent in self.agents:
@@ -1139,7 +1006,8 @@ def planning_and_control_context_carryover(
 
         ## planning
         planning_dir = Path(work_dir).expanduser().resolve() / "planning"
-
+        #planning_dir.mkdir(parents=True, exist_ok=True)  # Hannah - create planning directory
+        
         start_time = time.time()
 
 
@@ -1422,6 +1290,7 @@ def planning_and_control(
 
     ## planning
     planning_dir = Path(work_dir).expanduser().resolve() / "planning"
+    #planning_dir.mkdir(parents=True, exist_ok=True)  # Hannah - create planning directory
 
     start_time = time.time()
     
@@ -1470,6 +1339,11 @@ def planning_and_control(
     cmbagent.display_cost()
 
     planning_output = copy.deepcopy(cmbagent.final_context)
+    
+    # HANNAH - debug
+    #print("planning_output type:", type(planning_output))
+    #print("planning_output:", planning_output)
+
     outfile = save_final_plan(planning_output, planning_dir)
     print(f"Structured plan written to {outfile}")
     print(f"Planning took {execution_time_planning:.4f} seconds")
@@ -1509,6 +1383,8 @@ def planning_and_control(
     start_time = time.time()
     cmbagent = CMBAgent(
         work_dir = control_dir,
+        skip_rag_agents=False,
+        make_vector_stores=['camb', 'cobaya', 'classy_sz'],
         agent_llm_configs = {
                             'engineer': engineer_config,
                             'researcher': researcher_config,
@@ -1517,7 +1393,6 @@ def planning_and_control(
         },
         api_keys = api_keys
         )
-    
 
     # print(f"in cmbagent.py: idea_maker_config: {idea_maker_config}")
     # print(f"in cmbagent.py: idea_hater_config: {idea_hater_config}")

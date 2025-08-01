@@ -78,14 +78,14 @@ def register_functions_to_agents(cmbagent_instance):
     control_starter = cmbagent_instance.get_agent_from_name('control_starter')
     camb_context = cmbagent_instance.get_agent_from_name('camb_context')
     classy_context = cmbagent_instance.get_agent_from_name('classy_context')
-
+    
     if not cmbagent_instance.skip_rag_agents:
         classy_sz = cmbagent_instance.get_agent_from_name('classy_sz_agent')
         classy_sz_response_formatter = cmbagent_instance.get_agent_from_name('classy_sz_response_formatter')
         camb = cmbagent_instance.get_agent_from_name('camb_agent')
         camb_response_formatter = cmbagent_instance.get_agent_from_name('camb_response_formatter')
         planck = cmbagent_instance.get_agent_from_name('planck_agent')
-
+    
     # print("Perplexity API key: ", os.getenv("PERPLEXITY_API_KEY"))
     # perplexity_search_tool = PerplexitySearchTool(
     #                     model="sonar-reasoning-pro",

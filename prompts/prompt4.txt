@@ -1,0 +1,12 @@
+Download the file: https://supernova.lbl.gov/Union/figures/SCPUnion2.1_mu_vs_z.txt
+Its description is:
+<description>
+An ASCII table with tab-separated columns: Supernova Name, Redshift, Distance Modulus, and Distance Modulus Error. For Union2.1, there is an additional column for the probability that the supernova was hosted by a low-mass galaxy.
+</description>
+Fit this data within flat LCDM model with two free parameters: H0 and Omega_L. Write a simple MCMC (but optimized/fast) code to fit for H0 and Ω_L using the SN1a data.
+Make a contour plot and show the 1d posteriors, and quote the mean and 1-sigma on each parameter.
+Finally show the data along with the best fit model and 68%/95% CL regions.
+Comment on the results.
+
+Constraints:
+We are running this analysis on a Ubuntu with 8 available threads. Ensure you use the resources optimally so the MCMC can run fast, i.e., within a few minutes until convergence.
