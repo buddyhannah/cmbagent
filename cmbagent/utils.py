@@ -113,41 +113,42 @@ Agents that use tool calling:
 engineer, researcher, idea_maker, idea_hater, camb_context, classy_context, aas_keyword_finder
 '''
 default_agents_llm_model = {
-    "engineer": "llama_tool",
-    "aas_keyword_finder": "groq_tool",
+    "engineer": "llama",
+    "aas_keyword_finder": "groq_tool", # Call record_aas_keywords tool
     "task_improver": "exaone",
-    "task_recorder": "llama_tool",
-    "researcher": "groq_tool",
+    "task_recorder": "groq_tool", # llama Call record_improved_task
+    "researcher": "groq", 
     "perplexity": "exaone",
     "planner": "qwen",
     "plan_reviewer": "groq",
-    "idea_hater": "groq_tool",
-    "idea_maker": "mistral_tool",
+    "idea_hater": "groq", 
+    "idea_maker": "mistral", 
     
     # rag agents
-    "classy_sz": "llama_tool",
-    "camb": "mistral_tool",
-    "classy": "llama_tool",
-    "cobaya": "llama_tool",
+    "classy_sz": "mistral_rag",
+    "camb": "mistral_rag",
+    "classy": "mistral_rag",
+    "cobaya": "mistral_rag",
     
-    "planck": "llama_tool",
+    "planck": "mistral_rag",
     
-    "camb_context": "deepseek_tool",
+    "camb_context": "llama",
 
     # HANNAH -ADDED
-    "plan_setter": "groq_tool", # Uses tool call to run record_plan_constraints?
-    "classy_context": "exaone", 
+    "plan_setter": "groq_tool", # Uses tool call to run record_plan_constraints
+    "classy_context": "exaone",
     "control": "deepseek_tool", # no response. Call record_status tool
-    "control_starter": "deepseek_tool", # no response. Call record_status tool
+    "control_starter": "groq_tool", # no response. Call record_status tool. record_status_starter?
     "engineer_nest": "llama", # trigger nested chat for engineer agent.
-    "executor": "groq_tool", # ??????????????? Execution requires tool calling?
-    "execute_bash": "mistral_tool", # execute code from installer
+    "executor": "groq", # Execution requires tool calling?
+    "execute_bash": "mistral", # execute code from installer
     "idea_hater_response_formatter": "llama", # format response from idea hater
     "idea_saver": "groq_tool", # no response. Call tool record_ideas 
-    "plan_recorder":"deepseek_tool", # no response. Call tool record_plan
-    "plot_judge":"groq_tool", # call_vlm_judge tool 
-    "researcher_executor":"llama_tool", # save content provided by the researcher
+    "plan_recorder":"mistral_tool", # no response. Call tool record_plan
+    "plot_judge":"groq_tool", # used? Requires tool? call_vlm_judge tool 
+    "researcher_executor":"llama", # _tool? save content provided by the researcher
     "review_recorder":"groq_tool",  # No response. Call tool record_review
+    "terminator": "llama_tool", #  Call  terminate_session
     
     # formatting agents
 
@@ -157,7 +158,7 @@ default_agents_llm_model = {
     "cobaya_response_formatter": "llama",
     "engineer_response_formatter": "deepseek",
     "researcher_response_formatter": "deepseek",
-    "executor_response_formatter": "exaone",
+    "executor_response_formatter": "groq_tool", # Call post_execution_transfer
     
 
    
@@ -198,6 +199,14 @@ def get_model_config(model, api_keys=None):
     
     all_configs = {
         # require tool calling
+        "mistral_rag": {
+            "model": "mistral-small-latest",
+            "api_key": api_keys.get("MISTRAL"),  
+            "base_url": "https://api.mistral.ai/v1",
+            "api_type": "mistral",
+            "tool_choice": "auto", 
+            "top_p": default_top_p
+        },
         "mistral_tool": {
             "model": "mistral-small-latest",
             "api_key": api_keys.get("MISTRAL"),  
@@ -219,7 +228,7 @@ def get_model_config(model, api_keys=None):
             "api_key": api_keys["GROQ"],
             "api_type": "groq",
             "base_url": "https://api.groq.com",
-            "tool_choice": "required",
+            "tool_choice": "required", 
             "top_p": default_top_p
         },
         "llama_tool": {
@@ -285,13 +294,27 @@ def get_model_config(model, api_keys=None):
             "api_type": "openai",
             "base_url": f"https://api.cloudflare.com/client/v4/accounts/{api_keys.get('CLOUDFLARE_ACCOUNT_ID')}/ai/v1",
             # "response_format": { "type": "json_object" }, 
+            "response_format": {
+                "title": "JSON Mode",
+                "type": "object",
+                "properties": {
+                "type": {
+                    "type": "string",
+                    "enum": ["json_object", "json_schema"],
+                },
+                "json_schema": {},
+                }
+            }
+
         },
 
     }
 
 
     hasTool = "_tool" if  "tool" in model else '' 
-    if "groq" in model:
+    if "mistral_rag" in model:
+        configs = [all_configs[model]]
+    elif "groq" in model:
         configs = [all_configs[f"groq{hasTool}"], all_configs[f"llama{hasTool}"], all_configs[f"mistral{hasTool}"], all_configs[f"deepseek{hasTool}"]]
     elif "mistral" in model:
         configs = [all_configs[f"mistral{hasTool}"], all_configs[f"deepseek{hasTool}"], all_configs[f"groq{hasTool}"], all_configs[f"llama{hasTool}"]]
@@ -311,8 +334,11 @@ def get_model_config(model, api_keys=None):
         
     return configs
 
+
+
 # Initialize default_agent_llm_configs with list format
 api_keys_env = get_api_keys_from_env()
+
 default_agent_llm_configs = {
     agent: get_model_config(model, api_keys_env)
     for agent, model in default_agents_llm_model.items()

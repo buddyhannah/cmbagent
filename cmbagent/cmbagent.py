@@ -167,7 +167,6 @@ class CMBAgent:
 
         self.logger = logging.getLogger(__name__)
 
-        # self.non_rag_agents = ['engineer', 'planner', 'executor', 'admin', 'summarizer', 'rag_software_formatter']
 
         self.agent_list = agent_list
 
@@ -249,15 +248,17 @@ class CMBAgent:
             self.logger.info(f"{key}: {value}")
 
         self.agent_type = agent_type
-
-        self.agent_llm_configs = {
-        agent: {
-            "config_list": configs,  # The list from get_model_config()
-            "temperature": default_temperature,
-            "timeout": timeout
+        
+        
+        self.agent_llm_configs = {}
+        for agent_name, configs in default_agent_llm_configs.items():
+            self.agent_llm_configs[agent_name] = {
+                "config_list": configs,
+                "temperature": default_temperature,
+                "timeout": timeout
             }
-            for agent, configs in default_agent_llm_configs.items()
-        }
+           
+            
         self.agent_llm_configs.update(agent_llm_configs)
 
         # Hannah - format llm_configs.
@@ -281,8 +282,6 @@ class CMBAgent:
 
         if not self.skip_rag_agents:
             setup_cmbagent_data()
-
-            self.check_assistants(reset_assistant=reset_assistant) # check if assistants exist
 
             if cmbagent_debug:
                 print("\n\n Assistants checked!!!\n\n")
@@ -376,12 +375,12 @@ class CMBAgent:
             print()
             planner = self.get_agent_object_from_name('planner')
             print(planner.info['instructions'])
-
+        
         if cmbagent_debug:
             print('\nregistering all hand_offs...')
 
         register_all_hand_offs(self)
-
+        
         if cmbagent_debug:
             print('\nall hand_offs registered...')
 
@@ -821,81 +820,7 @@ class CMBAgent:
             print("\n")
 
         return new_assistant
-
-
-    def check_assistants(self, reset_assistant=[]):
-
-        client = OpenAI(api_key = self.openai_api_key)
-        available_assistants = client.beta.assistants.list(
-            order="desc",
-            limit="100",
-        )
-
-
-        # Create a list of assistant names for easy comparison
-        assistant_names = [d.name for d in available_assistants.data]
-        assistant_ids = [d.id for d in available_assistants.data]
-        assistant_models = [d.model for d in available_assistants.data]
-
-        for agent in self.agents:
-
-            if cmbagent_debug:
-                print('in cmbagent.py check_assistants: agent: ', agent.name)
-                print('non_rag_agent_names: ', self.non_rag_agent_names)
-
-            if agent.name not in self.non_rag_agent_names:
-                if cmbagent_debug:
-                    print(f"Checking agent: {agent.name}")
-
-                # Check if agent name exists in the available assistants
-                if agent.name in assistant_names:
-                    if cmbagent_debug:
-                        print(f"in cmbagent.py check_assistants: Agent {agent.name} exists in available assistants with id: {assistant_ids[assistant_names.index(agent.name)]}")
-
-                    if cmbagent_debug:
-                        print('in cmbagent.py check_assistants: this assistant model from openai: ',assistant_models[assistant_names.index(agent.name)])
-                        print('in cmbagent.py check_assistants: this assistant model from llm_config: ', agent.llm_config['config_list'][0]['model'])
-                    if assistant_models[assistant_names.index(agent.name)] != agent.llm_config['config_list'][0]['model']:
-                        if cmbagent_debug:
-                            print("in cmbagent.py check_assistants: Assistant model from openai does not match the requested model. Updating the assistant model.")
-                        client.beta.assistants.update(
-                            assistant_id=assistant_ids[assistant_names.index(agent.name)],
-                            model=agent.llm_config['config_list'][0]['model']
-                        )
-
-                    if reset_assistant and agent.name.replace('_agent', '') in reset_assistant:
-                        
-                        print("This agent is in the reset_assistant list. Resetting the assistant.")
-                        print("Deleting the assistant...")
-                        client.beta.assistants.delete(assistant_ids[assistant_names.index(agent.name)])
-                        print("Assistant deleted. Creating a new one...")
-                        new_assistant = self.create_assistant(client, agent)
-                        agent.info['assistant_config']['assistant_id'] = new_assistant.id
-                        
-
-                    else:
-
-                        assistant_id = agent.info['assistant_config']['assistant_id']
-
-                        if assistant_id != assistant_ids[assistant_names.index(agent.name)]:
-                            if cmbagent_debug:
-                                print("--> Assistant ID between yaml and openai do not match.")
-                                print(f"--> Assistant ID from your yaml: {assistant_id}")
-                                print(f"--> Assistant ID in openai: {assistant_ids[assistant_names.index(agent.name)]}")
-                                print("--> We will use the assistant id from openai")
-                            
-
-                            agent.info['assistant_config']['assistant_id'] = assistant_ids[assistant_names.index(agent.name)]
-                            if cmbagent_debug:
-                                print(f"--> Updating yaml file with new assistant id: {assistant_ids[assistant_names.index(agent.name)]}")
-                            update_yaml_preserving_format(f"{path_to_assistants}/{agent.name.replace('_agent', '') }.yaml", agent.name, assistant_ids[assistant_names.index(agent.name)], field = 'assistant_id')
-                    
-                else:
-
-                    new_assistant = self.create_assistant(client, agent)
-                    agent.info['assistant_config']['assistant_id'] = new_assistant.id
-
-
+  
 
     def show_plot(self,plot_name):
 
@@ -1283,7 +1208,7 @@ def planning_and_control(
                             researcher_filename = shared_context_default['researcher_filename'],
                             api_keys = None,
                             ):
-
+    '''
     # Create work directory if it doesn't exist
     Path(work_dir).expanduser().resolve().mkdir(parents=True, exist_ok=True)
     
@@ -1364,6 +1289,7 @@ def planning_and_control(
     
     print(f"\nTiming report data saved to: {timing_path}\n")
 
+
     ## delete empty folders during control
     database_full_path = os.path.join(planning_output['work_dir'], planning_output['database_path'])
     codebase_full_path = os.path.join(planning_output['work_dir'], planning_output['codebase_path'])
@@ -1371,6 +1297,19 @@ def planning_and_control(
     for folder in [database_full_path, codebase_full_path, time_full_path]:
         if not os.listdir(folder):
             os.rmdir(folder)
+
+    '''
+
+    # === SKIP PLANNING: Load existing final_plan.json ===
+    planning_dir = Path(work_dir).expanduser().resolve() / "planning"
+    final_plan_path = planning_dir / "final_plan.json"
+    with open(final_plan_path, 'r') as f:
+        planning_output = json.load(f)
+
+    print(f"Loaded existing plan from {final_plan_path}")
+    initialization_time_planning = 0
+    execution_time_planning = 0
+   
     
     ## control
     engineer_config = get_model_config(engineer_model, api_keys)
@@ -1599,7 +1538,12 @@ def one_shot(
             'engineer': engineer_config,
             'researcher': researcher_config,
         },
-        api_keys = api_keys
+        api_keys = api_keys,
+        # Hannah added
+        agent_list = ['camb','classy_sz'], # ,'cobaya','planck'
+        skip_rag_agents=False,
+        make_vector_stores=['camb','classy_sz'],
+      
         )
         
     end_time = time.time()

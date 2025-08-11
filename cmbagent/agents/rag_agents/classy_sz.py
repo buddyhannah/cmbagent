@@ -17,6 +17,5 @@ class ClassySzAgent(BaseAgent):
 
     def set_agent(self,**kwargs):
 
-        super().set_gpt_assistant_agent(**kwargs)
-
-
+        self._setup_native_retriever()
+        super().set_rag_assistant_agent(**kwargs)

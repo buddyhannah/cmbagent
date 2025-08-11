@@ -15,6 +15,6 @@ class CobayaAgent(BaseAgent):
 
     def set_agent(self,**kwargs):
 
-        super().set_gpt_assistant_agent(**kwargs)
+        super().set_rag_assistant_agent(**kwargs)
 
 
