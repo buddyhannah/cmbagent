@@ -5,7 +5,7 @@ import json
 import autogen.cmbagent_utils
 #autogen.cmbagent_utils.cmbagent_debug = True
 
-from cmbagent import planning_and_control, one_shot
+from cmbagent import planning_and_control, one_shot, nuclear_plant_control, human_in_the_loop
 from cmbagent.base_agent import BaseAgent
 import cmbagent
 from autogen.agentchat.group import AgentTarget
@@ -84,6 +84,8 @@ def camb_query():
     print("\n=== FINAL CHAT RESULT ===")
     print(chat_result)
     
+    
+    
 def main():
     if len(sys.argv) != 2:
         print("Usage: python script.py <case_number>")
@@ -115,6 +117,15 @@ def main():
 
     elif case == 3:
         camb_query()
+        
+    elif case == 4:
+        nuclear_plant_control(reactor_state_file="/home/dell/cmbagent/reactor_state.csv")
+        
+    elif case == 5:
+        task = open('prompts/knapsackPrompt.txt').read()
+        results = human_in_the_loop(task=task, agent="researcher")
+
+        
   
     else:
         print("Invalid case number")

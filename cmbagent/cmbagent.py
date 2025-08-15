@@ -890,7 +890,291 @@ class CMBAgent:
         return
 
 
+from typing import Dict, List
+from autogen import Agent
+from autogen.agentchat.group import ReplyResult, AgentTarget, Handoffs
+from autogen import register_function
 
+class NuclearAgent:
+    """ For defining the nuclear reactor control agent"""
+    
+    def __init__(self,
+                reactor_state_file: str = "nuclear_plant.csv",
+                agent_configs: Dict = None,
+                human_input_mode: str = "ALWAYS",
+                work_dir: str = "./output/namac",
+                agents_base_path: str = "/home/dell/cmbagent/cmbagent/agents/namac_agents",):
+        """
+        Args:
+            reactor_state_file: Path to CSV reactor state file
+            agent_configs: agent LLM configurations
+            human_input_mode: "ALWAYS" or "NEVER" for human approval
+            work_dir: Working directory for logs/outputs
+        """
+        self.agents_base_path = agents_base_path
+        self.reactor_state_file = reactor_state_file
+        self.work_dir = work_dir
+        
+        # Create working directory
+        os.makedirs(self.work_dir, exist_ok=True)
+        os.makedirs(f"{self.work_dir}/chats", exist_ok=True)
+        
+        # Initialize agents
+        self.agent_classes = self._import_agent_classes()
+        self.llm_config = self._create_llm_configs(agent_configs)
+        self.agents = self._initialize_agents(self.llm_config)
+        self._register_handoffs()
+        register_nuclear_functions(self)
+        
+    
+
+
+    def _create_llm_configs(self, agent_configs: Dict) -> Dict:
+        """Create the config list"""
+        prepared_configs = {}
+        for agent_name in self.agent_classes.keys():
+            agent_config = {
+                "temperature": default_temperature,
+                "timeout": 1200,
+                "config_list": agent_configs.get(agent_name, [])  # Fallback to empty list for admin
+            }
+            prepared_configs[agent_name] = agent_config
+            
+        return prepared_configs
+
+
+        
+    def _import_agent_classes(self) -> Dict:
+        """Import all agent classes from their modules"""
+        
+        agent_dirs = [
+            'diagnosis',
+            'strategy_inventory', 
+            'prognosis',
+            'strategy_assessment',
+            'admin',
+            'updater',
+        ]
+        
+        agent_classes = {}
+        
+        for agent_dir in agent_dirs:
+            agent_path = os.path.join(self.agents_base_path, agent_dir)
+            
+            # Find.py file in  agent directory
+            for filename in os.listdir(agent_path):
+                if filename.endswith(".py") and filename != "__init__.py" and not filename.startswith("."):
+                    module_name = filename[:-3]  # Remove .py extension
+                    class_name = ''.join([part.capitalize() for part in module_name.split('_')]) + 'Agent'
+                    
+                    # Import the module
+                    module_path = f"cmbagent.agents.namac_agents.{agent_dir}.{module_name}"
+                    try:
+                        module = importlib.import_module(module_path)
+                        agent_class = getattr(module, class_name)
+                        agent_classes[agent_dir] = agent_class
+                    except (ImportError, AttributeError) as e:
+                        print(f"Error loading agent {agent_dir}: {e}")
+                        raise
+                        
+        return agent_classes
+    
+
+    def _initialize_agents(self, configs: Dict) -> Dict[str, Agent]:
+        agents = {}
+        
+        for agent_name, agent_class in self.agent_classes.items():
+           
+            # Get system message
+            yaml_path = os.path.join(self.agents_base_path, agent_name, f"{agent_name}.yaml")
+            with open(yaml_path, 'r') as f:
+                system_message = f.read()
+            
+            
+            agent = agent_class(
+                name=agent_name,
+                system_message=system_message,
+                llm_config=configs.get(agent_name),
+                agent_type='swarm', 
+                work_dir=self.work_dir,
+                is_termination_msg=lambda x: False
+            )
+            
+            # Initialize handoffs 
+            if not hasattr(agent, 'handoffs'):
+                agent.handoffs = Handoffs()
+    
+            agent.set_agent()
+            
+            agents[agent_name] = agent
+   
+        return agents
+
+    
+    def _register_handoffs(self):
+        
+        agents = self.agents
+        agents['diagnosis'].agent.handoffs.set_after_work(AgentTarget(agents['strategy_inventory'].agent))
+        agents['strategy_inventory'].agent.handoffs.set_after_work(AgentTarget(agents['prognosis'].agent))
+        agents['prognosis'].agent.handoffs.set_after_work(AgentTarget(agents['strategy_assessment'].agent))
+        agents['strategy_assessment'].agent.handoffs.set_after_work(AgentTarget(agents['admin'].agent))
+        agents['admin'].agent.handoffs.set_after_work(AgentTarget(agents['updater'].agent))
+        agents['updater'].agent.handoffs.set_after_work(AgentTarget(agents['diagnosis'].agent))  # Close loop
+    
+    def read_reactor_state(self):
+        """Read current reactor state from CSV file"""
+        try:
+            df = pd.read_csv(self.reactor_state_file)
+            return df.iloc[-1].to_dict()  # Return most recent state
+        except Exception as e:
+            print(f"Error reading reactor state: {e}")
+            return None  
+
+    
+    def run_cycle(self, max_cycles: int = 10):
+        """Start the chat"""
+        from autogen.agentchat import initiate_group_chat
+        
+        # 1. Prepare context
+        initial_state = self.read_reactor_state()
+        context = ContextVariables(data={
+            'main_task': f"Current Reactor State:\n{initial_state}",
+            'work_dir': self.work_dir,
+            'reactor_state': initial_state
+        })
+       
+        # 2. Get the underlying AutoGen agents
+        autogen_agents = [agent.agent for agent in self.agents.values()]
+    
+    
+        # 2. Create agent pattern
+        agent_pattern = AutoPattern(
+            agents=autogen_agents,
+            initial_agent=self.agents['diagnosis'].agent,  
+            context_variables=context,
+            group_manager_args={
+                "llm_config": self.llm_config['diagnosis'],
+                "name": "nuclear_control"
+            }
+        )
+        
+        # 3. Start chat
+        chat_result, context_variables, last_agent = initiate_group_chat(
+            pattern=agent_pattern,
+            messages=context['main_task'],
+            max_rounds=max_cycles * len(self.agents)
+        )
+    
+        return chat_result
+    
+   
+def register_nuclear_functions(namac_instance):
+    """Register nuclear-specific functions with the updater agent"""
+    updater_agent =namac_instance.agents['updater']
+    
+    def update_reactor_state(action: str) -> ReplyResult:
+        """Apply an action to the reactor state, save it, and hand off to diagnosis agent."""
+        df = pd.read_csv(namac_instance.reactor_state_file)
+        current = df.iloc[-1].to_dict()
+
+        print(f"[Updater] Applying action: {action}")
+
+        actions = {
+            "add_coolant": lambda s: {
+                **s,
+                'coolant_level': min(100, s['coolant_level'] + 15),
+                'temperature': max(0, s['temperature'] - 5),
+                'pressure': min(100, s['pressure'] + 5)
+            },
+            "reduce_power": lambda s: {
+                **s,
+                'power_output': max(0, s['power_output'] - 15),
+                'temperature': max(0, s['temperature'] - 5),
+                'coolant_level': max(0, s['coolant_level'] - 5),
+                'pressure': max(0, s['pressure_level'] - 5)
+            },
+            "vent_pressure": lambda s: {
+                **s,
+                'pressure': max(0, s['pressure'] - 15),
+                'temperature': min(100, s['temperature'] + 5),
+                'coolant_level': max(0, s['coolant_level'] - 5)
+            },
+            "scram": lambda s: {
+                **s,
+                'power_output': 0,
+                'temperature': max(0, s['temperature'] - 20),
+                'moderator_level': max(0, s['moderator_level'] - 10),
+                'coolant_level': max(0, s['coolant_level'] - 5),
+                'pressure': max(0, s['pressure'] - 5),
+            },
+            "increase_power": lambda s: {
+                **s,
+                'power_output': min(100, s['power_output'] + 10),
+                'temperature': min(100, s['temperature'] + 5),
+                'pressure': min(100, s['pressure'] + 10),
+                'moderator_level': max(0, s['coolant_level'] - 5),
+            },
+        }
+        
+        # Apply action
+        new_state = actions.get(action, lambda s: s)(current)
+
+        # Append updated state to CSV
+        pd.DataFrame([new_state]).to_csv(
+            namac_instance.reactor_state_file,
+            mode='a',
+            header=not os.path.exists(namac_instance.reactor_state_file),
+            index=False
+        )
+
+        # Build new context for next agent
+        updated_context = ContextVariables(data={
+            "main_task": f"Current Reactor State:\n{new_state}",
+            "work_dir": namac_instance.work_dir,
+            "reactor_state": new_state
+        })
+
+        # Hand off to diagnosis
+        return ReplyResult(
+            target=AgentTarget(namac_instance.agents['diagnosis'].agent),
+            message=f"Action '{action}' applied. Reactor state updated. Passing to diagnosis.",
+            context_variables=updated_context
+        )
+            
+    register_function(
+        update_reactor_state,
+        caller=updater_agent.agent,
+        executor=updater_agent.agent,
+        description="""
+        Update the reactor state with the desired action and store results as a CSV.
+        Args:
+            action (str): The action to be taken by the nuclear reactor
+        """,
+    )
+        
+            
+   
+
+def nuclear_plant_control(reactor_state_file,
+                         work_dir=work_dir_default,
+                         max_rounds=50,
+                         api_keys=None):
+    """Nuclear plant control loop"""
+    api_keys = api_keys or get_api_keys_from_env()
+    
+    nuclear_agent = NuclearAgent(
+        reactor_state_file=reactor_state_file,
+        agent_configs={
+            'diagnosis': get_model_config(default_agents_llm_model['diagnosis'], api_keys),
+            'strategy_inventory': get_model_config(default_agents_llm_model['strategy_inventory'], api_keys),
+            'prognosis': get_model_config(default_agents_llm_model['prognosis'], api_keys),
+            'strategy_assessment': get_model_config(default_agents_llm_model['strategy_assessment'], api_keys),
+            'updater': get_model_config(default_agents_llm_model['updater'], api_keys),
+        },
+        work_dir=work_dir
+    )
+    
+    return nuclear_agent.run_cycle(max_rounds)
 
 
 def planning_and_control_context_carryover(
@@ -1208,7 +1492,7 @@ def planning_and_control(
                             researcher_filename = shared_context_default['researcher_filename'],
                             api_keys = None,
                             ):
-    '''
+   
     # Create work directory if it doesn't exist
     Path(work_dir).expanduser().resolve().mkdir(parents=True, exist_ok=True)
     
@@ -1299,7 +1583,6 @@ def planning_and_control(
             os.rmdir(folder)
 
     '''
-
     # === SKIP PLANNING: Load existing final_plan.json ===
     planning_dir = Path(work_dir).expanduser().resolve() / "planning"
     final_plan_path = planning_dir / "final_plan.json"
@@ -1309,7 +1592,7 @@ def planning_and_control(
     print(f"Loaded existing plan from {final_plan_path}")
     initialization_time_planning = 0
     execution_time_planning = 0
-   
+   '''
     
     ## control
     engineer_config = get_model_config(engineer_model, api_keys)
@@ -1540,9 +1823,9 @@ def one_shot(
         },
         api_keys = api_keys,
         # Hannah added
-        agent_list = ['camb','classy_sz'], # ,'cobaya','planck'
-        skip_rag_agents=False,
-        make_vector_stores=['camb','classy_sz'],
+        #agent_list = ['camb','classy_sz'], # ,'cobaya','planck'
+        #skip_rag_agents=False,
+        #make_vector_stores=['camb','classy_sz'],
       
         )
         
@@ -1640,6 +1923,8 @@ def one_shot(
             os.rmdir(folder)
 
     return results
+
+
 
 def human_in_the_loop(task,
          work_dir = work_dir_default,

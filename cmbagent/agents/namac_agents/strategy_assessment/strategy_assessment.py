@@ -1,8 +1,8 @@
 import os
 from cmbagent.base_agent import BaseAgent
 
-class AdminAgent(BaseAgent):
-    
+class StrategyAssessmentAgent(BaseAgent):
+
     def __init__(self, llm_config=None, **kwargs):
 
         agent_id = os.path.splitext(os.path.abspath(__file__))[0]
@@ -10,10 +10,7 @@ class AdminAgent(BaseAgent):
         super().__init__(llm_config=llm_config, agent_id=agent_id, **kwargs)
 
 
-    def set_agent(self):
-    
-        super().set_admin_agent()
+    def set_agent(self,**kwargs):
 
-
-
+        super().set_assistant_agent(**kwargs)
 

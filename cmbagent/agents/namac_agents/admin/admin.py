@@ -11,7 +11,7 @@ class AdminAgent(BaseAgent):
 
 
     def set_agent(self):
-    
+
         super().set_admin_agent()
 
 

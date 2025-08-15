@@ -9,7 +9,8 @@ from autogen.agentchat import ConversableAgent, UpdateSystemMessage
 import autogen
 import copy
 from autogen.agentchat import UserProxyAgent
-
+from typing import Dict
+import pandas as pd
 # cmbagent_debug=True
 
 cmbagent_debug = autogen.cmbagent_utils.cmbagent_debug
@@ -41,6 +42,7 @@ class BaseAgent:
             print('\n\n')
 
         self.llm_config = copy.deepcopy(llm_config)
+        #print(f"[DEBUG] llm_config {self.llm_config}")
 
         self.info = yaml_load_file(agent_id + ".yaml")
 
@@ -49,7 +51,7 @@ class BaseAgent:
         # if self.name == 'idea_maker':
         #     print('idea_maker: ', self.info)
         #     print('llm_config: ', self.llm_config)
-        if 'temperature' in self.llm_config['config_list'][0]:
+        if len(self.llm_config['config_list']) > 0 and 'temperature' in self.llm_config['config_list'][0]:
             temperature = self.llm_config['config_list'][0]['temperature']
             self.llm_config['config_list'][0].pop('temperature')
             self.llm_config['temperature'] = temperature
@@ -181,7 +183,7 @@ class BaseAgent:
         
     
     def file_search(self, query: str):
-        #print(f"\n=== ENTERING file_search ===")
+        print(f"\n=== ENTERING file_search ===")
         #print(f"File search called with: {query}")
         # print(f"\nCurrent agent state:")
         # print(f"Handoffs object: {self.agent.handoffs}")
@@ -191,7 +193,7 @@ class BaseAgent:
         
         if not hasattr(self, 'retriever') or self.retriever is None:
             raise RuntimeError("Retriever not initialized. Call _setup_native_retriever() first.")
-        results = self.retriever.search(query, 3) # file_search_max_num_results
+        results = self.retriever.search(query, file_search_max_num_results)
         return {
             "raw_results": results,  
             "query": query

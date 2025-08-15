@@ -112,14 +112,15 @@ default_llm_model = "llama"
 Agents that use tool calling:
 engineer, researcher, idea_maker, idea_hater, camb_context, classy_context, aas_keyword_finder
 '''
+# Llama API does not have access to any execution environment!
 default_agents_llm_model = {
     "engineer": "llama",
     "aas_keyword_finder": "groq_tool", # Call record_aas_keywords tool
-    "task_improver": "exaone",
+    "task_improver": "groq",
     "task_recorder": "groq_tool", # llama Call record_improved_task
     "researcher": "groq", 
     "perplexity": "exaone",
-    "planner": "qwen",
+    "planner": "llama",
     "plan_reviewer": "groq",
     "idea_hater": "groq", 
     "idea_maker": "mistral", 
@@ -134,10 +135,9 @@ default_agents_llm_model = {
     
     "camb_context": "llama",
 
-    # HANNAH -ADDED
     "plan_setter": "groq_tool", # Uses tool call to run record_plan_constraints
-    "classy_context": "exaone",
-    "control": "deepseek_tool", # no response. Call record_status tool
+    "classy_context": "llama",
+    "control": "groq_tool", # no response. Call record_status tool
     "control_starter": "groq_tool", # no response. Call record_status tool. record_status_starter?
     "engineer_nest": "llama", # trigger nested chat for engineer agent.
     "executor": "groq", # Execution requires tool calling?
@@ -148,30 +148,35 @@ default_agents_llm_model = {
     "plot_judge":"groq_tool", # used? Requires tool? call_vlm_judge tool 
     "researcher_executor":"llama", # _tool? save content provided by the researcher
     "review_recorder":"groq_tool",  # No response. Call tool record_review
-    "terminator": "llama_tool", #  Call  terminate_session
+    "terminator": "groq_tool", #  Call  terminate_session
     
     # formatting agents
-
-    "classy_sz_response_formatter": "deepseek",
+    "classy_sz_response_formatter": "groq",
     "camb_response_formatter": "groq",
     "classy_response_formatter": "llama",
     "cobaya_response_formatter": "llama",
-    "engineer_response_formatter": "deepseek",
-    "researcher_response_formatter": "deepseek",
-    "executor_response_formatter": "groq_tool", # Call post_execution_transfer
+    "engineer_response_formatter": "groq",
+    "researcher_response_formatter": "groq",
+    "executor_response_formatter": "groq_tool", # TODO Switching to tool causes major lag. Call post_execution_transfer
+    
+    # Nuclear agents
+    "diagnosis": "llama", 
+    "strategy_inventory": "llama",
+    "prognosis": "llama", 
+    "strategy_assessment": "llama", 
+    "updater": "groq_tool", 
     
 
    
 }
+
 '''
-"classy_sz_response_formatter": "cloudflare",
+    "classy_sz_response_formatter": "cloudflare",
     "camb_response_formatter": "cloudflare",
     "classy_response_formatter": "cloudflare",
     "cobaya_response_formatter": "cloudflare",
     "engineer_response_formatter": "cloudflare",
-    "researcher_response_formatter": "cloudflare",
-    "executor_response_formatter": "cloudflare",
-    
+    "researcher_response_formatter": "cloudflare", 
 '''
 
 default_agent_llm_configs = {}
@@ -239,7 +244,19 @@ def get_model_config(model, api_keys=None):
             "tool_choice":"required",
             "top_p": default_top_p
         },
+        # "@cf/meta/llama-3.1-8b-instruct-fast",
+        # "@hf/thebloke/deepseek-coder-6.7b-instruct-awq",
+        "cloudflare_tool": {
+            "model": "@hf/nousresearch/hermes-2-pro-mistral-7b",   
+            "api_key": api_keys.get("CLOUDFLARE"),
+            "api_type": "openai",
+            "base_url": f"https://api.cloudflare.com/client/v4/accounts/{api_keys.get('CLOUDFLARE_ACCOUNT_ID')}/ai/v1",
+            "tool_choice": "required"
+
+        },
         
+        
+        # no tool models
         "mistral": {
             "model": "mistral-small",
             "api_key": api_keys.get("MISTRAL"), 
@@ -288,49 +305,37 @@ def get_model_config(model, api_keys=None):
             "tool_choice": "none",
             "top_p": default_top_p
         },
-        "cloudflare": {
-            "model": "@cf/meta/llama-3.1-8b-instruct-fast", #"@hf/thebloke/deepseek-coder-6.7b-instruct-awq",  
-            "api_key": api_keys.get("CLOUDFLARE"),
-            "api_type": "openai",
-            "base_url": f"https://api.cloudflare.com/client/v4/accounts/{api_keys.get('CLOUDFLARE_ACCOUNT_ID')}/ai/v1",
-            # "response_format": { "type": "json_object" }, 
-            "response_format": {
-                "title": "JSON Mode",
-                "type": "object",
-                "properties": {
-                "type": {
-                    "type": "string",
-                    "enum": ["json_object", "json_schema"],
-                },
-                "json_schema": {},
-                }
-            }
-
-        },
+        
 
     }
-
+    
 
     hasTool = "_tool" if  "tool" in model else '' 
     if "mistral_rag" in model:
-        configs = [all_configs[model]]
-    elif "groq" in model:
-        configs = [all_configs[f"groq{hasTool}"], all_configs[f"llama{hasTool}"], all_configs[f"mistral{hasTool}"], all_configs[f"deepseek{hasTool}"]]
-    elif "mistral" in model:
-        configs = [all_configs[f"mistral{hasTool}"], all_configs[f"deepseek{hasTool}"], all_configs[f"groq{hasTool}"], all_configs[f"llama{hasTool}"]]
+        configs = [all_configs[model]]   
+    elif "cloudflare_tool" in model:
+        return [all_configs[model]]
     elif "llama" in model:
-        configs = [all_configs[f"llama{hasTool}"], all_configs[f"mistral{hasTool}"], all_configs[f"deepseek{hasTool}"], all_configs[f"groq{hasTool}"]]
-    elif "deepseek" in model:
-        configs = [all_configs[f"deepseek{hasTool}"], all_configs[f"groq{hasTool}"], all_configs[f"llama{hasTool}"], all_configs[f"mistral{hasTool}"]]
-    elif "cloudflare" in model:
-        configs=[all_configs[f"cloudflare{hasTool}"]]
-    # no tool calling
+        configs = [all_configs["llama"], all_configs["exaone"],  all_configs["mistral"], all_configs["deepseek"], all_configs[f"groq"]]
     elif "exaone" in model:
-        configs = [all_configs["exaone"], all_configs["llama"], all_configs["groq"], all_configs[f"cloudflare"], all_configs["deepseek"],  all_configs["mistral"], all_configs["qwen"]]
-    elif "qwen" in model:
-        configs = [all_configs["qwen"], all_configs["exaone"], all_configs["llama"], all_configs["deepseek"],  all_configs["groq"], all_configs["cloudflare"], all_configs["mistral"]]
+        configs = [all_configs["exaone"], all_configs["llama"],  all_configs["mistral"], all_configs["deepseek"], all_configs[f"groq"]]
+    elif "llama" in model:
+        configs = [all_configs["llama"], all_configs["mistral"], all_configs["deepseek"], all_configs[f"groq"]]
+    elif "groq" in model:
+        configs = [all_configs[f"groq{hasTool}"], all_configs[f"mistral{hasTool}"], all_configs[f"deepseek{hasTool}"]]
+    elif "mistral" in model:
+        configs = [all_configs[f"mistral{hasTool}"], all_configs[f"deepseek{hasTool}"], all_configs[f"groq{hasTool}"]]
+    elif "deepseek" in model:
+        configs = [all_configs[f"deepseek{hasTool}"], all_configs[f"groq{hasTool}"], all_configs[f"mistral{hasTool}"]]
     else:
         raise ValueError(f"Invalid model {model}")
+    
+    if hasTool == '_tool':
+        configs.extend([all_configs['cloudflare_tool']])
+                       
+    if hasTool == '' and model not in ["mistral_rag", "llama", "exaone"]:  # Only add non-Llama fallbacks if not requiring tools
+        configs.extend([all_configs['llama'], all_configs['exaone']])
+    
         
     return configs
 
