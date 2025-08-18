@@ -894,6 +894,10 @@ from typing import Dict, List
 from autogen import Agent
 from autogen.agentchat.group import ReplyResult, AgentTarget, Handoffs
 from autogen import register_function
+from autogen.agentchat.contrib.capabilities import transforms
+from autogen.agentchat.contrib.capabilities.transform_messages import TransformMessages
+from autogen.agentchat.contrib.capabilities.transforms import MessageHistoryLimiter
+
 
 class NuclearAgent:
     """ For defining the nuclear reactor control agent"""
@@ -983,6 +987,15 @@ class NuclearAgent:
     def _initialize_agents(self, configs: Dict) -> Dict[str, Agent]:
         agents = {}
         
+        # TODO Limit message history
+        message_limits = {
+            "diagnosis": 3,
+            "updater": 3,
+        }
+       
+
+        
+        
         for agent_name, agent_class in self.agent_classes.items():
            
             # Get system message
@@ -1004,8 +1017,16 @@ class NuclearAgent:
             if not hasattr(agent, 'handoffs'):
                 agent.handoffs = Handoffs()
     
+            # Call set_agent
             agent.set_agent()
             
+            
+            lookback_limit = message_limits.get(agent_name, 8)
+            limiter = MessageHistoryLimiter(max_messages=lookback_limit, keep_first_message=False)
+            transformer = TransformMessages(transforms=[limiter], verbose=False)
+            transformer.add_to_agent(agent.agent)
+          
+                
             agents[agent_name] = agent
    
         return agents
@@ -1020,30 +1041,19 @@ class NuclearAgent:
         agents['strategy_assessment'].agent.handoffs.set_after_work(AgentTarget(agents['admin'].agent))
         agents['admin'].agent.handoffs.set_after_work(AgentTarget(agents['updater'].agent))
         agents['updater'].agent.handoffs.set_after_work(AgentTarget(agents['diagnosis'].agent))  # Close loop
-    
-    def read_reactor_state(self):
-        """Read current reactor state from CSV file"""
-        try:
-            df = pd.read_csv(self.reactor_state_file)
-            return df.iloc[-1].to_dict()  # Return most recent state
-        except Exception as e:
-            print(f"Error reading reactor state: {e}")
-            return None  
-
+             
     
     def run_cycle(self, max_cycles: int = 10):
         """Start the chat"""
         from autogen.agentchat import initiate_group_chat
         
         # 1. Prepare context
-        initial_state = self.read_reactor_state()
         context = ContextVariables(data={
-            'main_task': f"Current Reactor State:\n{initial_state}",
+            'main_task':"Get the nuclear reactor state and identify the SSFs",
             'work_dir': self.work_dir,
-            'reactor_state': initial_state
         })
-       
-        # 2. Get the underlying AutoGen agents
+
+        # 2. Get the agents
         autogen_agents = [agent.agent for agent in self.agents.values()]
     
     
@@ -1066,14 +1076,19 @@ class NuclearAgent:
         )
     
         return chat_result
-    
-   
+
+
+      
+
 def register_nuclear_functions(namac_instance):
+    
     """Register nuclear-specific functions with the updater agent"""
-    updater_agent =namac_instance.agents['updater']
+    diagnosis_agent = namac_instance.agents['diagnosis']
+    updater_agent = namac_instance.agents['updater']
     
     def update_reactor_state(action: str) -> ReplyResult:
         """Apply an action to the reactor state, save it, and hand off to diagnosis agent."""
+        
         df = pd.read_csv(namac_instance.reactor_state_file)
         current = df.iloc[-1].to_dict()
 
@@ -1091,7 +1106,7 @@ def register_nuclear_functions(namac_instance):
                 'power_output': max(0, s['power_output'] - 15),
                 'temperature': max(0, s['temperature'] - 5),
                 'coolant_level': max(0, s['coolant_level'] - 5),
-                'pressure': max(0, s['pressure_level'] - 5)
+                'pressure': max(0, s['pressure'] - 5)
             },
             "vent_pressure": lambda s: {
                 **s,
@@ -1129,18 +1144,58 @@ def register_nuclear_functions(namac_instance):
 
         # Build new context for next agent
         updated_context = ContextVariables(data={
-            "main_task": f"Current Reactor State:\n{new_state}",
+            'main_task':"Get the nuclear reactor state and identify the SSFs",
             "work_dir": namac_instance.work_dir,
-            "reactor_state": new_state
         })
-
+        
+        
+        # TODO Clear history of non-tool agents
+        for myName in ['strategy_assessment','prognosis', 'strategy_inventory']:
+            print(f"cleared {myName}")
+            namac_instance.agents[myName].agent.clear_history()
+            
+        
         # Hand off to diagnosis
         return ReplyResult(
             target=AgentTarget(namac_instance.agents['diagnosis'].agent),
             message=f"Action '{action}' applied. Reactor state updated. Passing to diagnosis.",
             context_variables=updated_context
         )
+          
+    def read_reactor_state():
+        print("running read reactor state")
+        try:
+            df = pd.read_csv(namac_instance.reactor_state_file)
+            state = df.iloc[-1].to_dict()
+            '''
+            return (
+            "CURRENT REACTOR STATUS REPORT:\n"
+            f"- Temperature: {state['temperature']}\n"
+            f"- Pressure: {state['pressure']}\n"
+            f"- Coolant Level: {state['coolant_level']}\n"
+            f"- Power Output: {state['power_output']}\n"
+            f"-Moderator Level: {state['moderator_level']} "
+            )
+            '''
+            return state
+
+        
+        except Exception as e:
+            error_msg = f"Error reading reactor state: {e}"
+            print(error_msg)
+            return error_msg
+
+
             
+    register_function(
+        read_reactor_state,
+        caller=diagnosis_agent.agent,
+        executor=diagnosis_agent.agent,
+        description="""
+        Read the reactor state from a CSV file
+        """,
+    )
+    
     register_function(
         update_reactor_state,
         caller=updater_agent.agent,

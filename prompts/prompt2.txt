@@ -1,0 +1,4 @@
+ Get cosmological parameter values from Planck 2018 analysis of TT,TE,EE+lowE+lensing with the Plik likelihood in LCDM. 
+Use Cobaya with Classy_SZ to evaluate the ACT DR6 lensing likelihood for sigma8=0.8 and Omega_m=0.31. Other parameters set to Planck 2018.  
+To set Omega_m, adjust the value of omch2. 
+Give me the value of log-likelihood.

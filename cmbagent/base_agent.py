@@ -250,8 +250,8 @@ class BaseAgent:
                 update_agent_state_before_reply=[UpdateSystemMessage(self.info["instructions"]),],
                 description=self.info["description"],
                 llm_config=self.llm_config,
-            cmbagent_debug=cmbagent_debug,
-            functions=functions,
+                cmbagent_debug=cmbagent_debug,
+                functions=functions,
             )
         
 

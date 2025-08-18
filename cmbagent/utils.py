@@ -160,11 +160,11 @@ default_agents_llm_model = {
     "executor_response_formatter": "groq_tool", # TODO Switching to tool causes major lag. Call post_execution_transfer
     
     # Nuclear agents
-    "diagnosis": "llama", 
+    "diagnosis": "mistral_rag", 
     "strategy_inventory": "llama",
     "prognosis": "llama", 
     "strategy_assessment": "llama", 
-    "updater": "groq_tool", 
+    "updater": "mistral_rag", 
     
 
    
