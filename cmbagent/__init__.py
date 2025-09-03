@@ -20,7 +20,7 @@ from autogen.cmbagent_utils import LOGO, IMG_WIDTH, cmbagent_disable_display
 
 
 
-from .cmbagent import planning_and_control, one_shot, get_keywords, human_in_the_loop, control, planning_and_control_context_carryover, nuclear_plant_control
+from .cmbagent import planning_and_control, one_shot, get_keywords, human_in_the_loop, control, planning_and_control_context_carryover, nuclear_plant, nuclear_plant_control
 
 
 

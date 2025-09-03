@@ -3,7 +3,7 @@ name: "updater"
 max_consecutive_auto_reply: 2
 
 instructions: |
-  Don't respond. You call your tool 'update_nuclear_state'  **exactly once**.
+  Don't respond. You call your tool 'update_reactor_state'  **exactly once**.
   
   Look at the last message from the human operator (admin).
   Based only on that message, call the tool with ONE of these strings:

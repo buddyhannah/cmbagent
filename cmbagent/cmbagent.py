@@ -15,6 +15,7 @@ from collections import defaultdict
 from openai import OpenAI
 from IPython.display import Image
 from autogen.agentchat.group import ContextVariables
+from autogen import GroupChat # Hannah added
 from autogen.agentchat.group.patterns import AutoPattern
 
 from .agents.planner_response_formatter.planner_response_formatter import save_final_plan
@@ -890,9 +891,9 @@ class CMBAgent:
         return
 
 
-from typing import Dict, List
+from typing import Dict, List, Literal
 from autogen import Agent
-from autogen.agentchat.group import ReplyResult, AgentTarget, Handoffs
+from autogen.agentchat.group import ReplyResult, AgentTarget, Handoffs, TerminateTarget
 from autogen import register_function
 from autogen.agentchat.contrib.capabilities import transforms
 from autogen.agentchat.contrib.capabilities.transform_messages import TransformMessages
@@ -902,38 +903,58 @@ from autogen.agentchat.contrib.capabilities.transforms import MessageHistoryLimi
 class NuclearAgent:
     """ For defining the nuclear reactor control agent"""
     
-    def __init__(self,
+    def __init__(
+                self,
                 reactor_state_file: str = "nuclear_plant.csv",
+                agent_description_json: str = "namac_agent_descriptions.json",
                 agent_configs: Dict = None,
-                human_input_mode: str = "ALWAYS",
                 work_dir: str = "./output/namac",
-                agents_base_path: str = "/home/dell/cmbagent/cmbagent/agents/namac_agents",):
+                agents_base_path: str = "/home/dell/cmbagent/cmbagent/agents/namac_agents",
+                is_planning_and_control: bool = False):
         """
         Args:
             reactor_state_file: Path to CSV reactor state file
             agent_configs: agent LLM configurations
-            human_input_mode: "ALWAYS" or "NEVER" for human approval
             work_dir: Working directory for logs/outputs
         """
         self.agents_base_path = agents_base_path
         self.reactor_state_file = reactor_state_file
         self.work_dir = work_dir
         
+        self.is_planning_and_control = is_planning_and_control
+        self.agent_description_json = agent_description_json
+        
         # Create working directory
         os.makedirs(self.work_dir, exist_ok=True)
         os.makedirs(f"{self.work_dir}/chats", exist_ok=True)
         
         # Initialize agents
-        self.agent_classes = self._import_agent_classes()
-        self.llm_config = self._create_llm_configs(agent_configs)
-        self.agents = self._initialize_agents(self.llm_config)
+        self.agent_classes = self.import_agent_classes()
+        self.llm_config = self.create_llm_configs(agent_configs)
+        self.agents = self.initialize_agents(self.llm_config)
+        
+        
+        self.context_variables = {
+            "reactor_state": None,
+            "summary": None,
+            "plan": None,
+            "prognosis": None,
+            "strategy_inventory": None,
+            "strategy_assessment": None,
+            "current_step": None,
+            "last_step_status": None,
+            "pre_planner_history": []
+        }
+
+        
         self._register_handoffs()
         register_nuclear_functions(self)
-        
+        self.attach_context_filters()
+
     
 
 
-    def _create_llm_configs(self, agent_configs: Dict) -> Dict:
+    def create_llm_configs(self, agent_configs: Dict) -> Dict:
         """Create the config list"""
         prepared_configs = {}
         for agent_name in self.agent_classes.keys():
@@ -948,7 +969,7 @@ class NuclearAgent:
 
 
         
-    def _import_agent_classes(self) -> Dict:
+    def import_agent_classes(self) -> Dict:
         """Import all agent classes from their modules"""
         
         agent_dirs = [
@@ -956,12 +977,14 @@ class NuclearAgent:
             'strategy_inventory', 
             'prognosis',
             'strategy_assessment',
-            'admin',
             'updater',
+            'updater_helper'
         ]
         
-        agent_classes = {}
+        if self.is_planning_and_control:
+            agent_dirs += ['planner', 'control', 'summarizer', 'admin']
         
+        agent_classes = {}
         for agent_dir in agent_dirs:
             agent_path = os.path.join(self.agents_base_path, agent_dir)
             
@@ -984,13 +1007,21 @@ class NuclearAgent:
         return agent_classes
     
 
-    def _initialize_agents(self, configs: Dict) -> Dict[str, Agent]:
+    def initialize_agents(self, configs: Dict) -> Dict[str, Agent]:
         agents = {}
         
         # TODO Limit message history
         message_limits = {
             "diagnosis": 3,
             "updater": 3,
+            "control": 5,
+            "planner": 3,
+            "strategy_inventory": 3,
+            "prognosis": 3,
+            "strategy_assessment": 3,
+            "updater_helper": 3,
+            "admin": 3,
+            "summarizer": 3
         }
        
 
@@ -1020,12 +1051,12 @@ class NuclearAgent:
             # Call set_agent
             agent.set_agent()
             
-            
+            '''
             lookback_limit = message_limits.get(agent_name, 8)
             limiter = MessageHistoryLimiter(max_messages=lookback_limit, keep_first_message=False)
             transformer = TransformMessages(transforms=[limiter], verbose=False)
             transformer.add_to_agent(agent.agent)
-          
+            '''
                 
             agents[agent_name] = agent
    
@@ -1033,37 +1064,68 @@ class NuclearAgent:
 
     
     def _register_handoffs(self):
-        
         agents = self.agents
-        agents['diagnosis'].agent.handoffs.set_after_work(AgentTarget(agents['strategy_inventory'].agent))
-        agents['strategy_inventory'].agent.handoffs.set_after_work(AgentTarget(agents['prognosis'].agent))
-        agents['prognosis'].agent.handoffs.set_after_work(AgentTarget(agents['strategy_assessment'].agent))
-        agents['strategy_assessment'].agent.handoffs.set_after_work(AgentTarget(agents['admin'].agent))
-        agents['admin'].agent.handoffs.set_after_work(AgentTarget(agents['updater'].agent))
-        agents['updater'].agent.handoffs.set_after_work(AgentTarget(agents['diagnosis'].agent))  # Close loop
+        if self.is_planning_and_control:
+            for agent_name, agent in agents.items():
+                if agent_name == "control":
+                    continue
+                elif agent_name == "admin":
+                    agent.agent.handoffs.set_after_work(AgentTarget(agents['planner'].agent))
+                elif agent_name == "updater_helper":
+                    agent.agent.handoffs.set_after_work(AgentTarget(agents['updater'].agent))
+                else:
+                    agent.agent.handoffs.set_after_work(AgentTarget(agents['control'].agent))
+        else:
+           
+            agents['diagnosis'].agent.handoffs.set_after_work(AgentTarget(agents['strategy_inventory'].agent))
+            agents['strategy_inventory'].agent.handoffs.set_after_work(AgentTarget(agents['prognosis'].agent))
+            agents['prognosis'].agent.handoffs.set_after_work(AgentTarget(agents['strategy_assessment'].agent))
+            agents['strategy_assessment'].agent.handoffs.set_after_work(AgentTarget(agents['updater_helper'].agent))
+            agents['updater_helper'].agent.handoffs.set_after_work(AgentTarget(agents['updater'].agent))
+            agents['updater'].agent.handoffs.set_after_work(AgentTarget(agents['diagnosis'].agent))
              
     
-    def run_cycle(self, max_cycles: int = 10):
+    def run_cycle(self, max_cycles: int = 10, user_query: str = None):
         """Start the chat"""
         from autogen.agentchat import initiate_group_chat
         
-        # 1. Prepare context
+        with open(self.agent_description_json, "r") as f:
+            agent_data = json.load(f)
+
+
+        # Prepare context
+        main_task = user_query if user_query else "Get the nuclear reactor state and identify the SSFs"
         context = ContextVariables(data={
-            'main_task':"Get the nuclear reactor state and identify the SSFs",
+            'agent_descriptions': agent_data, 
+            'main_task': main_task,
             'work_dir': self.work_dir,
+            'current_plan_step_number': 0,
+            'number_of_steps_in_plan': 0,
+            'current_status': 'not started',
+            'current_sub_task': '',
+            'agent_for_sub_task': '',
+            'current_instructions': ''
         })
 
-        # 2. Get the agents
+        # Get the agents
         autogen_agents = [agent.agent for agent in self.agents.values()]
+        
+        if self.is_planning_and_control:
+            initial_agent = self.agents['planner'].agent
+        else:
+            initial_agent = self.agents['diagnosis'].agent
+            print("Using hardcoded workflow")
+        
     
     
-        # 2. Create agent pattern
+        # Create agent pattern
+        start_agent =  self.llm_config['planner'] if self.is_planning_and_control else  self.llm_config['diagnosis']
         agent_pattern = AutoPattern(
             agents=autogen_agents,
-            initial_agent=self.agents['diagnosis'].agent,  
+            initial_agent=initial_agent,  
             context_variables=context,
             group_manager_args={
-                "llm_config": self.llm_config['diagnosis'],
+                "llm_config": start_agent,
                 "name": "nuclear_control"
             }
         )
@@ -1086,6 +1148,99 @@ def register_nuclear_functions(namac_instance):
     diagnosis_agent = namac_instance.agents['diagnosis']
     updater_agent = namac_instance.agents['updater']
     
+    if namac_instance.is_planning_and_control:
+        control_agent = namac_instance.agents.get('control')
+        planner_agent = namac_instance.agents.get('planner')
+        #summarizer_agent = namac_instance.agents['summarizer']
+    
+    def extract_plan_from_planner(plan: str, context_variables: ContextVariables) -> ReplyResult:
+        """
+        Store planner's plan in control's context.
+        
+        Args:
+            plan (str): The plan to store
+            context_variables (ContextVariables): The context variables
+        
+        Returns:
+            ReplyResult: Transfer to control agent with the plan in context
+        """
+        # Store the plan in context for the control agent
+        print(plan)
+        context_variables['planner_plan'] = plan
+        context_variables['current_plan_step_number'] = 1  
+        context_variables['current_status'] = 'not started'
+        
+        return ReplyResult(
+            target=AgentTarget(namac_instance.agents['control'].agent),
+            message=f"register_nuclear_functions ran. Transferring to control.",
+            context_variables=context_variables
+        )
+        
+       
+    def record_status(
+            current_status: Literal["in progress", "step failed", "step completed", "done"],
+            current_plan_step_number: int,
+            current_sub_task: str,
+            current_instructions: str,
+            agent_for_sub_task: Literal["diagnosis", "strategy_inventory", "prognosis", 
+                                    "strategy_assessment", "admin", "updater_helper", "planner","summarizer"],
+            context_variables: ContextVariables
+        ) -> ReplyResult:
+            """
+            Updates execution context and manages agent transfers for nuclear reactor control.
+            """
+            
+            
+            print(f"Record status ran with status {current_status} and agent {agent_for_sub_task}")
+            # Map statuses to icons
+            status_icons = {
+                "step completed": "✅",
+                "step failed": "❌",
+                "in progress": "⏳",
+                "done": "💯"
+            }
+            
+            icon = status_icons.get(current_status, "")
+            
+            # Update context variables
+            context_variables.update({
+                "current_plan_step_number": current_plan_step_number,
+                "current_sub_task": current_sub_task,
+                "agent_for_sub_task": agent_for_sub_task,
+                "current_instructions": current_instructions,
+                "current_status": current_status
+            })
+            
+            # Transfer to next agent
+            agent_to_transfer_to = None
+            
+            if current_status == "in progress":
+                agent_to_transfer_to = namac_instance.agents[agent_for_sub_task].agent
+            
+            elif current_status == "step completed":
+                agent_to_transfer_to = namac_instance.agents['control'].agent
+                
+            elif current_status == "done":
+                agent_to_transfer_to = namac_instance.agents['admin'].agent
+             
+            elif current_status == "step failed":
+                agent_to_transfer_to = namac_instance.agents['admin'].agent
+            
+            
+
+            return ReplyResult(
+                target=AgentTarget(agent_to_transfer_to),
+                message=f"""
+                    **Step number:** {current_plan_step_number}
+                    **Sub-task:** {current_sub_task}
+                    **Agent in charge:** `{agent_for_sub_task}`
+                    **Instructions:** {current_instructions}
+                    **Status:** {current_status} {icon}
+                """,
+                context_variables=context_variables
+            )
+   
+
     def update_reactor_state(action: str) -> ReplyResult:
         """Apply an action to the reactor state, save it, and hand off to diagnosis agent."""
         
@@ -1142,26 +1297,37 @@ def register_nuclear_functions(namac_instance):
             index=False
         )
 
-        # Build new context for next agent
+        
+        # TODO Clear history of non-tool agents
+        '''
+        for myName in ['strategy_assessment','prognosis', 'strategy_inventory']:
+            print(f"cleared {myName}")
+            namac_instance.agents[myName].agent.clear_history()
+        
+        '''
+        
+        # planning and control mode, hand off to control
+        if namac_instance.is_planning_and_control:
+            return ReplyResult(
+                target=AgentTarget(namac_instance.agents['control'].agent),
+                message=f"Action '{action}' applied successfully", data={"new_state": new_state} 
+            )
+            
+        
+        
+        # Hand off to diagnosis
         updated_context = ContextVariables(data={
             'main_task':"Get the nuclear reactor state and identify the SSFs",
             "work_dir": namac_instance.work_dir,
         })
         
-        
-        # TODO Clear history of non-tool agents
-        for myName in ['strategy_assessment','prognosis', 'strategy_inventory']:
-            print(f"cleared {myName}")
-            namac_instance.agents[myName].agent.clear_history()
-            
-        
-        # Hand off to diagnosis
         return ReplyResult(
             target=AgentTarget(namac_instance.agents['diagnosis'].agent),
             message=f"Action '{action}' applied. Reactor state updated. Passing to diagnosis.",
             context_variables=updated_context
         )
-          
+        
+        
     def read_reactor_state():
         print("running read reactor state")
         try:
@@ -1184,8 +1350,6 @@ def register_nuclear_functions(namac_instance):
             error_msg = f"Error reading reactor state: {e}"
             print(error_msg)
             return error_msg
-
-
             
     register_function(
         read_reactor_state,
@@ -1206,11 +1370,122 @@ def register_nuclear_functions(namac_instance):
             action (str): The action to be taken by the nuclear reactor
         """,
     )
-        
-            
-   
+    
+    if namac_instance.is_planning_and_control:
+        register_function(
+            record_status,
+            caller=control_agent.agent,
+            executor=control_agent.agent,
+            description=r"""
+            Updates the context and returns the current progress.
+            Must be called **before calling the agent in charge of the next sub-task**.
+            Must be called **after** each action taken.
 
-def nuclear_plant_control(reactor_state_file,
+            Args:
+                current_status (str): The current status ("in progress", "step failed", "step completed", "done").
+                current_plan_step_number (int): The current step number in the plan.
+                current_sub_task (str): Description of the current sub-task.
+                current_instructions (str): Instructions for the sub-task.
+                agent_for_sub_task (str): The agent responsible for the sub-task.
+                context_variables (dict): context dictionary.
+
+            Returns:
+                ReplyResult: Contains a formatted status message and updated context.
+            """,
+        )
+        
+        register_function(
+                extract_plan_from_planner,
+                caller=planner_agent.agent,
+                executor=planner_agent.agent,
+                description="""
+                Extract the plan from planner's messages and store it for control agent.
+                Args:
+                    plan (str): The plan to execute.
+                """,
+        )
+        
+
+'''
+    def filter_agent_messages(summary: str) -> ReplyResult:
+        for agent_name, agent in namac_instance.agents.items():
+            if agent_name == "admin":
+                continue
+        
+            print(f"\n\n************** Filtering {agent_name} **************\n")
+            agent.agent.reset()
+            
+              
+        # Build new context for next agent
+        updated_context = ContextVariables(data={
+            'main_task':f"{summary} Get the nuclear reactor state and identify the SSFs",
+            "work_dir": namac_instance.work_dir,
+        })
+        
+
+        # Hand off to diagnosis
+        return ReplyResult(
+            target=AgentTarget(diagnosis_agent),
+            message=f"Reactor state updated. Passing to diagnosis.",
+            context_variables=updated_context
+        )
+ 
+    def filter_agent_messages(keep_last_n=2):
+        """Filter messages"""
+       
+        for agent_name, agent in namac_instance.agents.items():
+            print(f"Filtering {agent_name}")
+            try:
+                
+                for key in list(agent.agent.chat_messages.keys()):
+                    if agent.agent.chat_messages[key]:
+                        
+                        print("messages before filtering")
+                        for i, msg in enumerate(agent.agent.chat_messages[key]):
+                            role = msg.get('role', 'unknown')
+                            content_preview = str(msg.get('content', 'no-content'))[:100] + "..." if len(str(msg.get('content', ''))) > 100 else msg.get('content', 'no-content')
+                            tool_calls = f", tool_calls: {len(msg.get('tool_calls', []))}" if msg.get('tool_calls') else ""
+                            print(f"  {i}: [{role}] {content_preview}{tool_calls}")
+                        
+                        
+                        # keep system messages
+                        system_messages = [msg for msg in agent.agent.chat_messages[key] 
+                                        if msg.get('role') == 'system']
+                        other_messages = [msg for msg in agent.agent.chat_messages[key] 
+                                        if msg.get('role') != 'system']
+                        
+                        # Keep last n messages
+                        filtered_messages = system_messages + other_messages[-keep_last_n:]
+                        agent.agent.chat_messages[key] = filtered_messages
+                        
+                        print("messages after filtering")
+                        for i, msg in enumerate(agent.agent.chat_messages[key]):
+                            role = msg.get('role', 'unknown')
+                            content_preview = str(msg.get('content', 'no-content'))[:100] + "..." if len(str(msg.get('content', ''))) > 100 else msg.get('content', 'no-content')
+                            tool_calls = f", tool_calls: {len(msg.get('tool_calls', []))}" if msg.get('tool_calls') else ""
+                            print(f"  {i}: [{role}] {content_preview}{tool_calls}")
+                        
+                # Build new context for next agent
+                updated_context = ContextVariables(data={
+                    'main_task':"Get the nuclear reactor state and identify the SSFs",
+                    "work_dir": namac_instance.work_dir,
+                })
+                
+
+                # Hand off to diagnosis
+                return ReplyResult(
+                    target=AgentTarget(diagnosis_agent),
+                    message=f"Reactor state updated. Passing to diagnosis.",
+                    context_variables=updated_context
+                )
+                
+            except Exception as e:
+                print(f"Error filtering {agent_name}: {e}")
+                
+'''        
+
+def nuclear_plant_control(task,
+                         reactor_state_file,
                          work_dir=work_dir_default,
                          max_rounds=50,
                          api_keys=None):
@@ -1225,6 +1500,34 @@ def nuclear_plant_control(reactor_state_file,
             'prognosis': get_model_config(default_agents_llm_model['prognosis'], api_keys),
             'strategy_assessment': get_model_config(default_agents_llm_model['strategy_assessment'], api_keys),
             'updater': get_model_config(default_agents_llm_model['updater'], api_keys),
+            'control': get_model_config(default_agents_llm_model['namac_control'], api_keys),
+            'planner': get_model_config(default_agents_llm_model['namac_planner'], api_keys),
+            'summarizer': get_model_config(default_agents_llm_model['namac_summarizer'], api_keys),
+        },
+        work_dir=work_dir,
+        is_planning_and_control = True
+    )
+    
+    return nuclear_agent.run_cycle(max_rounds, task)
+
+
+
+def nuclear_plant(reactor_state_file,
+                         work_dir=work_dir_default,
+                         max_rounds=50,
+                         api_keys=None):
+    """Nuclear plant control loop"""
+    api_keys = api_keys or get_api_keys_from_env()
+    
+    nuclear_agent = NuclearAgent(
+        reactor_state_file=reactor_state_file,
+        agent_configs={
+            'diagnosis': get_model_config(default_agents_llm_model['diagnosis'], api_keys),
+            'strategy_inventory': get_model_config(default_agents_llm_model['strategy_inventory'], api_keys),
+            'prognosis': get_model_config(default_agents_llm_model['prognosis'], api_keys),
+            'strategy_assessment': get_model_config(default_agents_llm_model['strategy_assessment'], api_keys),
+            'updater': get_model_config(default_agents_llm_model['updater'], api_keys),
+            #'summarizer': get_model_config(default_agents_llm_model['namac_summarizer'], api_keys),
         },
         work_dir=work_dir
     )

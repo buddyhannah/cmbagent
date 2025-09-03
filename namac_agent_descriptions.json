@@ -1,0 +1,91 @@
+{
+  "agents": {
+    "diagnosis": {
+      "purpose": "Monitors reactor state, flagging safety issues",
+      "features": [
+        "Identifies abnormal readings",
+        "Lists identified safety-significant factors"
+      ],
+      "limitations": [
+        "Cannot predict future behavior",
+        "Cannot make recommendations"
+      ],
+      "input": [],
+      "output": [ "Reactor state", "Identified safety issues"]
+      
+    },
+
+    "strategy_inventory": {
+      "purpose": "List valid actions given the current reactor state",
+      "features": [
+        "Knows predefined mitigation strategies",
+        "Matches strategies to current reactor state"
+      ],
+      "limitations": [
+       "Cannot make recommendations"
+      ],
+      "input": ["Reactor state"],
+      "output": ["List of valid actions"]
+    },
+
+    
+    "prognosis": {
+      "purpose": "Forecasts reactor state given a certain action is taken",
+      "features": [
+        "Predicts future reactor state"
+      ],
+      "limitations": [
+        "Cannot make recommendations"
+      ],
+      "input": ["Reactor state", "Candidate strategies"],
+      "output": ["Predicted future state for each candiate strategies"]
+    },
+    
+
+    "strategy_assessment": {
+      "purpose": "Analyze predicted outcomes to recommend the best action",
+      "features": [
+        "Compares predicted outcomes",
+        "Recommends best strategy based on safety issues"
+      ],
+      "limitations": [
+        "Depends on prognosis",
+        "May miss long-term effects",
+        "Cannot execute any actions"
+      ],
+      
+    "input": ["Predicted outcomes"],
+    "output": ["Justified ranking of each strategy"]
+    },
+
+    "updater_helper": {
+      "purpose": "Asks operator which action to take, then executes the desired action and updates the nuclear reactor state",
+      "features": [
+        "Updates reactor state with chosen action"
+      ],
+      "limitations": [
+        "Cannot judge action safety",
+        "Only records changes"
+      ],
+      "input": ["Recommended strategy"],
+      "output": []
+      
+    },
+
+
+    "summarizer": {
+      "purpose": "Summarizes the gathered data to give an answer to the user",
+      "features": [
+        "Summarizes results"
+      ],
+      "limitations": [
+        "Cannot make recommendations",
+        "Knows nothing about the state of the reactor except for the output from other agents"
+      ],
+      
+      "input": [],
+      "output": ["Summary of the results"]
+      }
+
+  }
+}

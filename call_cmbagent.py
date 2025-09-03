@@ -5,7 +5,7 @@ import json
 import autogen.cmbagent_utils
 #autogen.cmbagent_utils.cmbagent_debug = True
 
-from cmbagent import planning_and_control, one_shot, nuclear_plant_control, human_in_the_loop
+from cmbagent import planning_and_control, one_shot, nuclear_plant_control, nuclear_plant, human_in_the_loop
 from cmbagent.base_agent import BaseAgent
 import cmbagent
 from autogen.agentchat.group import AgentTarget
@@ -118,10 +118,16 @@ def main():
     elif case == 3:
         camb_query()
         
+        
     elif case == 4:
-        nuclear_plant_control(reactor_state_file="/home/dell/cmbagent/reactor_state.csv")
+        task = input("Please enter a task for the NAMAC system: ")
+        nuclear_plant_control(task, reactor_state_file="/home/dell/cmbagent/reactor_state.csv")
+        
         
     elif case == 5:
+        nuclear_plant(reactor_state_file="/home/dell/cmbagent/reactor_state.csv")
+        
+    elif case == 6:
         task = open('prompts/knapsackPrompt.txt').read()
         results = human_in_the_loop(task=task, agent="researcher")
 

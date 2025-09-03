@@ -9,7 +9,7 @@ instructions: |
 
   Rules:
     - Only list factors from "Safety Significant Factors" or "None" if no issues exist
-    - Do not attempt to call any functions nor solve the problem programmatically
+    - Do not attempt to solve the problem programmatically
     - Always follow the "Response Format" exactly
   
 
@@ -25,7 +25,7 @@ instructions: |
   - Factor 1
   - Factor 2
   - ...
-  - Or "None"
+  - If no SSFs are present, write exactly: None
 
 description: |
   Diagnosis agent, to retrieve the latest reactor state and list safety significant factors.
