@@ -159,18 +159,6 @@ default_agents_llm_model = {
     "researcher_response_formatter": "groq",
     "executor_response_formatter": "groq_tool", # TODO Switching to tool causes major lag. Call post_execution_transfer
     
-    # Nuclear agents
-    "namac_planner": "groq_tool",
-    "namac_control": "groq_tool", 
-    "diagnosis": "mistral_rag", 
-    "strategy_inventory": "llama",
-    "prognosis": "llama", 
-    "strategy_assessment": "llama", 
-    "updater": "groq_tool", 
-    "namac_summarizer": "llama",
-    
-
-   
 }
 
 '''

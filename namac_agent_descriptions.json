@@ -74,9 +74,9 @@
 
 
     "summarizer": {
-      "purpose": "Summarizes the gathered data to give an answer to the user",
+      "purpose": "Summarizes the gathered data to give an answer to the user.",
       "features": [
-        "Summarizes results"
+        "Summarizes results",
       ],
       "limitations": [
         "Cannot make recommendations",

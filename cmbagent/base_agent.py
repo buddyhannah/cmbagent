@@ -318,8 +318,6 @@ class BaseAgent:
             print('code_agent set with work_dir: ', self.work_dir, '.... moving on.\n')
 
 
-
-
     def set_admin_agent(self,instructions=None):
 
         logger = logging.getLogger(self.name) 

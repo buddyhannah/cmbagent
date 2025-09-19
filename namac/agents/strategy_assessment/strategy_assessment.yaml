@@ -9,6 +9,11 @@ instructions: |
     - Do not attempt to call any functions nor solve the problem programmatically
     - Always follow the "Response Format" exactly
  
+  Reactor state:
+  {reactor_state}
+
+  Safety Issues:
+  {ssfs}
  
   Response Format
   *** Strategy Rankings (Best to Worst) ***

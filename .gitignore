@@ -92,4 +92,6 @@ cmbagent_env/lib/python3.12/site-packages/autogen/**  # Re-ignore again
 !cmbagent_env/lib/python3.12/site-packages/autogen/oai/**
 
 
+# Ignore previous run logs
+previous_runs/*
 

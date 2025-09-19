@@ -5,11 +5,15 @@ import json
 import autogen.cmbagent_utils
 #autogen.cmbagent_utils.cmbagent_debug = True
 
-from cmbagent import planning_and_control, one_shot, nuclear_plant_control, nuclear_plant, human_in_the_loop
+from cmbagent import planning_and_control, one_shot, human_in_the_loop
+from namac import namac_hardcoded, namac_planning_and_control
 from cmbagent.base_agent import BaseAgent
 import cmbagent
 from autogen.agentchat.group import AgentTarget
 from autogen.agentchat import UserProxyAgent
+
+
+
 
 
 def get_api_keys_from_env():
@@ -121,11 +125,11 @@ def main():
         
     elif case == 4:
         task = input("Please enter a task for the NAMAC system: ")
-        nuclear_plant_control(task, reactor_state_file="/home/dell/cmbagent/reactor_state.csv")
+        namac_planning_and_control(task, reactor_state_file="/home/dell/cmbagent/reactor_state.csv")
         
         
     elif case == 5:
-        nuclear_plant(reactor_state_file="/home/dell/cmbagent/reactor_state.csv")
+        namac_hardcoded(reactor_state_file="/home/dell/cmbagent/reactor_state.csv")
         
     elif case == 6:
         task = open('prompts/knapsackPrompt.txt').read()
