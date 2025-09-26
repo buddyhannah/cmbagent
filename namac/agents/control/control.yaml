@@ -24,8 +24,8 @@ instructions: |
    {current_agent}
 
 
-
-   You must call `record_status` to implement the plan step-by-step until the final step.
+   You must call `record_status` to implement the plan step-by-step until the final step. Do NOT attempt to call any other functions!
+   
    Termination conditions:
    - If the current step failed:
          * Set the next task to "Error. Human intervention required"  

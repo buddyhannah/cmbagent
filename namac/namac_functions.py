@@ -6,11 +6,10 @@ from IPython.display import Image
 from autogen.agentchat.group import ContextVariables
 from autogen.agentchat.group.patterns import AutoPattern
 
-from typing import Dict, List, Literal
+from typing import Dict, List, Literal, Optional, Tuple
 from autogen import Agent
 from autogen.agentchat.group import ReplyResult, AgentTarget, Handoffs, TerminateTarget
 from autogen import register_function
-
 
 
 
@@ -24,6 +23,8 @@ def register_nuclear_functions(namac_instance):
         control_agent = namac_instance.agents.get('control')
         planner_agent = namac_instance.agents.get('planner')
         admin_agent = namac_instance.agents.get('admin')
+        scenario_builder_agent = namac_instance.agents.get('scenario_builder')
+        planner_helper_agent = namac_instance.agents.get('planner_helper')
 
         #summarizer_agent = namac_instance.agents['summarizer']
     
@@ -61,9 +62,9 @@ def register_nuclear_functions(namac_instance):
                 
             )
     
-        # Plan good. Transfer to control
+        # Plan good. Transfer to planner_helper
         return ReplyResult(
-            target=AgentTarget(control_agent),
+            target=AgentTarget(planner_helper_agent),
             message=f"{plan}",
             context_variables=context_variables
         )
@@ -75,7 +76,7 @@ def register_nuclear_functions(namac_instance):
             current_step_number: int,
             next_task: str,
             next_agent: Literal["diagnosis", "strategy_inventory", "prognosis", 
-                                    "strategy_assessment", "admin", "updater_helper", "planner","summarizer"],
+                                    "strategy_assessment", "admin", "updater_helper", "planner","summarizer", "scenario_builder"],
             context_variables: ContextVariables,
          
         ) -> ReplyResult:
@@ -120,7 +121,7 @@ def register_nuclear_functions(namac_instance):
             
             # Step failed: Transfer to admin
             return ReplyResult(
-                    target=AgentTarget(namac_instance.agents[next_agent].agent),
+                    target=AgentTarget(admin_agent),
                     message=f"""
                         Step failed. Transfer to admin.
                     """,
@@ -237,58 +238,26 @@ def register_nuclear_functions(namac_instance):
         )
         
         
-    def read_reactor_state(context_variables: ContextVariables):
+    def read_reactor_state(
+        context_variables: ContextVariables,
+        temperature: Optional[Tuple[str, float]] = None,
+        pressure: Optional[Tuple[str, float]] = None,
+        coolant_level: Optional[Tuple[str, float]] = None,
+        power_output: Optional[Tuple[str, float]] = None,
+        moderator_level: Optional[Tuple[str, float]] = None,
+    ):
+        """
+        Read the reactor state, optionally overriding values for hypothetical scenarios.
+        
+        Each parameter can be:
+        - None (no change)
+        - ("set", value)   → sets the variable directly
+        - ("offset", delta) → applies a relative adjustment
+        """
+
         try:
             df = pd.read_csv(namac_instance.reactor_state_file)
             state = df.iloc[-1].to_dict()
-            
-            
-            # Identify safety issues
-            ssfs = []
-            if state["temperature"] > 85:
-                ssfs.append("High Temperature")
-            if state["pressure"] > 90:
-                ssfs.append("High Pressure")
-            if state["coolant_level"] < 15:
-                ssfs.append("Low Coolant")
-            if state["power_output"] > 80:
-                ssfs.append("High Power Output")
-            if state["moderator_level"] < 20:
-                ssfs.append("Low Neutron Moderator")
-
-            ssfs = ssfs if ssfs else ["None"]
-            
-
-            # Print state for user
-            state_list = list(state.items())
-            state_bullet = [f"{key}: {value}" for key, value in state_list]
-            print(
-                    "*** Reactor State ***\n"
-                    + "\n".join(f"- {v}" for v in state_bullet)
-                    + "\n\n*** Safety Significant Factors ***\n"
-                    + "\n".join(f"- {f}" for f in ssfs)
-                )
-            
-            
-            # Update context 
-            context_variables.update({
-                "reactor_state": state,
-                "ssfs": ssfs,
-                "current_step_status": "complete"
-            })
-        
-            message = "Reactor state and SSFs have been updated."
-            if not namac_instance.is_planning_and_control:
-                message += " Please provide available strategies."
-                
-                
-            # Transfer to next agent
-            next_agent = control_agent if namac_instance.is_planning_and_control else namac_instance.agents.get('strategy_inventory')
-            return ReplyResult(
-                target=AgentTarget(next_agent),
-                message=message,
-                context_variables=context_variables
-            )
             
         except Exception as e:
             context_variables.update({"current_step_status": "failed"})
@@ -298,7 +267,92 @@ def register_nuclear_functions(namac_instance):
                 context_variables=context_variables
             )
             
-           
+        def apply_op(var: str, op: Optional[Tuple[str, float]]):
+            if op is None:
+                return
+            mode, amount = op
+            if mode == "set":
+                state[var] = amount
+            elif mode == "offset":
+                state[var] = state[var] + amount
+                
+            # Keep values between 0 and 100
+            if state[var] < 0:
+                state[var] = 0
+            if state[var] > 100:
+                state[var] = 100
+
+        apply_op("temperature", temperature)
+        apply_op("pressure", pressure)
+        apply_op("coolant_level", coolant_level)
+        apply_op("power_output", power_output)
+        apply_op("moderator_level", moderator_level)
+        
+        # Identify safety issues
+        ssfs = []
+        if state["temperature"] > 85:
+            ssfs.append("High Temperature")
+        if state["pressure"] > 90:
+            ssfs.append("High Pressure")
+        if state["coolant_level"] < 15:
+            ssfs.append("Low Coolant")
+        if state["power_output"] > 80:
+            ssfs.append("High Power Output")
+        if state["moderator_level"] < 20:
+            ssfs.append("Low Neutron Moderator")
+
+        ssfs = ssfs if ssfs else ["None"]
+            
+
+        # Print state for user
+        state_list = list(state.items())
+        state_bullet = [f"{key}: {value}" for key, value in state_list]
+        print(
+                "*** Reactor State ***\n"
+                + "\n".join(f"- {v}" for v in state_bullet)
+                + "\n\n*** Safety Significant Factors ***\n"
+                + "\n".join(f"- {f}" for f in ssfs)
+            )
+        
+        
+        # Update context 
+        context_variables.update({
+            "reactor_state": state,
+            "ssfs": ssfs,
+            "current_step_status": "complete"
+        })
+    
+        message = "Reactor state and SSFs have been updated."
+        if not namac_instance.is_planning_and_control:
+            message += " Please provide available strategies."
+            
+            
+        # Transfer to next agent
+        next_agent = (
+            control_agent if namac_instance.is_planning_and_control 
+            else namac_instance.agents.get('strategy_inventory')
+        )
+        return ReplyResult(
+            target=AgentTarget(next_agent),
+            message=message,
+            context_variables=context_variables
+        )
+            
+        
+      
+    register_function(
+        read_reactor_state,
+        caller=scenario_builder_agent.agent,
+        executor=scenario_builder_agent.agent,
+        description="""
+        Read the reactor state from a CSV file, with optional hypothetical overrides.
+
+        For each variable, you can optionally pass
+        - ("set", value)    to set the variable directly
+        - ("offset", delta) to make a relative adjustment to the current value
+        """,
+    )
+
     register_function(
         read_reactor_state,
         caller=diagnosis_agent.agent,

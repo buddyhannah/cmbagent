@@ -84,11 +84,12 @@ class NuclearAgent:
             'prognosis',
             'strategy_assessment',
             'updater',
-            'updater_helper'
+            'updater_helper',
+            'planner_helper'
         ]
         
         if self.is_planning_and_control:
-            agent_dirs += ['planner', 'control', 'summarizer', 'admin']
+            agent_dirs += ['planner', 'control', 'summarizer', 'admin', 'scenario_builder', 'planner_helper']
         
         agent_classes = {}
         for agent_dir in agent_dirs:
@@ -182,6 +183,8 @@ class NuclearAgent:
                     agent.agent.handoffs.set_after_work(AgentTarget(agents['planner'].agent))
                 elif agent_name == "updater_helper":
                     agent.agent.handoffs.set_after_work(AgentTarget(agents['updater'].agent))
+                elif agent_name == "planner":
+                    agent.agent.handoffs.set_after_work(AgentTarget(agents['planner_helper'].agent))
                 else:
                     agent.agent.handoffs.set_after_work(AgentTarget(agents['control'].agent))
         
@@ -262,6 +265,7 @@ def namac_planning_and_control(task,
             'control': get_model_config(default_agents_llm_model['namac_control'], api_keys),
             'planner': get_model_config(default_agents_llm_model['namac_planner'], api_keys),
             'summarizer': get_model_config(default_agents_llm_model['namac_summarizer'], api_keys),
+            'scenario_builder': get_model_config(default_agents_llm_model['scenario_builder'], api_keys),
         },
         work_dir=work_dir,
         is_planning_and_control = True

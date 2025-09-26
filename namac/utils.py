@@ -26,7 +26,7 @@ default_llm_model = "llama"
 
 # Llama API does not have access to any execution environment!
 default_agents_llm_model = {
-    "namac_planner": " mistral_tool", # deepseek
+    "namac_planner": "mistral_tool", # deepseek
     "namac_control": "mistral_tool",
     "diagnosis": "mistral_tool",
     "strategy_inventory": "llama",
@@ -34,6 +34,7 @@ default_agents_llm_model = {
     "strategy_assessment": "llama",
     "updater": "mistral_tool",
     "namac_summarizer": "llama",
+    "scenario_builder": "mistral_tool",
 }
 
 def get_api_keys_from_env():
@@ -54,6 +55,14 @@ def get_model_config(model, api_keys=None):
     all_configs = {
         "mistral_tool": {
             "model": "mistral-small-latest",
+            "api_key": api_keys.get("MISTRAL"),
+            "base_url": "https://api.mistral.ai/v1",
+            "api_type": "mistral",
+            "tool_choice": "any",
+            "top_p": default_top_p,
+        },
+        "mistral1_tool": {
+            "model": "mistral-medium-latest",
             "api_key": api_keys.get("MISTRAL"),
             "base_url": "https://api.mistral.ai/v1",
             "api_type": "mistral",
@@ -88,6 +97,14 @@ def get_model_config(model, api_keys=None):
         
         "mistral": {
             "model": "mistral-small",
+            "api_key": api_keys.get("MISTRAL"), 
+            "base_url": "https://api.mistral.ai/v1",
+            "api_type": "mistral",
+            "tool_choice": "none", 
+            "top_p": default_top_p
+        },
+        "mistral1": {
+            "model": "mistral-medium",
             "api_key": api_keys.get("MISTRAL"), 
             "base_url": "https://api.mistral.ai/v1",
             "api_type": "mistral",
@@ -130,11 +147,11 @@ def get_model_config(model, api_keys=None):
     elif "cloudflare_tool" in model:
         return [all_configs[model]]
     elif "groq" in model:
-        configs = [all_configs[f"groq{hasTool}"], all_configs[f"deepseek{hasTool}"], all_configs[f"mistral{hasTool}"]]
+        configs = [all_configs[f"groq{hasTool}"], all_configs[f"cloudflare_tool"], all_configs[f"deepseek{hasTool}"], all_configs[f"mistral{hasTool}"], all_configs[f"mistral1{hasTool}"]]
     elif "mistral" in model:
-        configs = [all_configs[f"mistral{hasTool}"], all_configs[f"groq{hasTool}"], all_configs[f"deepseek{hasTool}"]]
+        configs = [all_configs[f"mistral{hasTool}"], all_configs[f"mistral1{hasTool}"], all_configs[f"groq{hasTool}"], all_configs[f"cloudflare_tool"], all_configs[f"deepseek{hasTool}"]]
     elif "deepseek" in model:
-        configs = [all_configs[f"deepseek{hasTool}"], all_configs[f"mistral{hasTool}"], all_configs[f"groq{hasTool}"]]
+        configs = [all_configs[f"deepseek{hasTool}"], all_configs[f"mistral{hasTool}"], all_configs[f"mistral1{hasTool}"], all_configs[f"groq{hasTool}"], all_configs[f"cloudflare_tool"]]
     else:
         raise ValueError(f"Invalid model {model}")
     

@@ -8,7 +8,30 @@ instructions: |
   Rules
    - Always follow the "Response Format" exactly
    - You must only use agents from "Available Agents" 
-   - After creating your plan, ALWAYS call the extract_plan_from_planner() tool with your plan as a parameter
+   
+
+
+  Question Handling Guidelines
+
+  **1. Current state questions**  
+  - Start with `diagnosis` to establish the reactor state.  
+  - Continue with whichever agents are needed to answer Z.  
+
+  **2. Contrastive state questions ("If X were Y…")**  
+  - First, fully analyze Z under the **current reactor state**.  
+  - Then call `scenario_builder` to override values and repeat the same downstream analysis.  
+  - End with `summarizer` to compare baseline vs hypothetical results.  
+
+  **3. Hypothetical action questions ("If I did A…")**  
+  - Use `prognosis` to predict the effect of the action.  
+  - Apply the predicted state with `scenario_builder`.  
+  - Run the same downstream analysis to determine Z.  
+  - If baseline comparison is implied, do step (1) first.  
+
+  **4. Sequential actions / multi-scenario**  
+  - For each action or scenario: prognosis  → scenario_builder → downstream analysis.  
+  - Compare results with `summarizer`.  
+  
 
   Available Agents:
   {agent_descriptions}
@@ -26,6 +49,7 @@ instructions: |
     - Step n:
       * sub-task: Transfer to operator for final review.
       * agent: admin
+
   **After creating your plan, you MUST call:**
   extract_plan_from_planner()
 

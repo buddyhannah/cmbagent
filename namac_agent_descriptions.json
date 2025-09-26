@@ -1,73 +1,69 @@
 {
   "agents": {
     "diagnosis": {
-      "purpose": "Monitors reactor state, flagging safety issues",
+      "purpose": "Identify safety issues in the actual reactor state",
       "features": [
-        "Identifies abnormal readings",
-        "Lists identified safety-significant factors"
+        "Reads the current reactor state",
+        "Flags the identified safety-significant factors"
       ],
       "limitations": [
         "Cannot predict future behavior",
         "Cannot make recommendations"
       ],
       "input": [],
-      "output": [ "Reactor state", "Identified safety issues"]
+      "output": [ "Reactor state", "Safety issues"]
       
     },
 
     "strategy_inventory": {
-      "purpose": "List valid actions given the current reactor state",
+      "purpose": "List valid mitigation strategies for a given reactor state",
       "features": [
-        "Knows predefined mitigation strategies",
-        "Matches strategies to current reactor state"
+        "Matches predefined strategies to the provided state"
       ],
       "limitations": [
-       "Cannot make recommendations"
+       "Only lists strategies, does not make recommendations"
       ],
       "input": ["Reactor state"],
-      "output": ["List of valid actions"]
+      "output": ["Valid strategies"]
     },
 
     
     "prognosis": {
-      "purpose": "Forecasts reactor state given a certain action is taken",
+      "purpose": "Forecast the reactor state given a certain action is taken",
       "features": [
-        "Predicts future reactor state"
+        "Predicts the future reactor state"
       ],
       "limitations": [
-        "Cannot make recommendations"
+        "Only lists the prognosed states, does not make recommendations"
       ],
-      "input": ["Reactor state", "Candidate strategies"],
-      "output": ["Predicted future state for each candiate strategies"]
+      "input": ["Reactor state", "Valid strategies"],
+      "output": ["Predicted future states"]
     },
     
 
     "strategy_assessment": {
-      "purpose": "Analyze predicted outcomes to recommend the best action",
+      "purpose": "Rank strategies for a given reactor state",
       "features": [
-        "Compares predicted outcomes",
-        "Recommends best strategy based on safety issues"
+        "Compares predicted outcomes from available strategies",
+        "Provides a justified ranking"
       ],
       "limitations": [
         "Depends on prognosis",
-        "May miss long-term effects",
-        "Cannot execute any actions"
+        "Cannot execute actions"
       ],
-      
-    "input": ["Predicted outcomes"],
-    "output": ["Justified ranking of each strategy"]
+    "input": ["Predicted future states"],
+    "output": ["Ranked strategies with reasoning"]
     },
 
     "updater_helper": {
       "purpose": "Asks operator which action to take, then executes the desired action and updates the nuclear reactor state",
       "features": [
-        "Updates reactor state with chosen action"
+        "Updates the reactor state with chosen action"
       ],
       "limitations": [
-        "Cannot judge action safety",
-        "Only records changes"
+        "Cannot judge action safety"
       ],
-      "input": ["Recommended strategy"],
+      "input": [],
       "output": []
       
     },
@@ -80,11 +76,26 @@
       ],
       "limitations": [
         "Cannot make recommendations",
-        "Knows nothing about the state of the reactor except for the output from other agents"
+        "Relies entirely on the outputs of other agents"
       ],
-      
       "input": [],
-      "output": ["Summary of the results"]
+      "output": ["Summary and final answer"]
+      },
+
+      "scenario_builder": { 
+        "purpose": "Temporarily override the reactor state with hypothetical values.",
+        "features": [
+          "Applies hypothetical overrides to the current reactor state",
+          "Updates the safety issues to match the overriden reactor state",
+          "Outputs the modified state for further analysis"
+        
+        ],
+        "limitations": [
+        "Never alters the real reactor state",
+        "Cannot make recommendations"
+        ],
+        "input": ["Hypothetical overrides"],
+        "output": ["Reactor state", "Safety issues"]
       }
 
   }
